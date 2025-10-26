@@ -1,12 +1,17 @@
-import argparse, math, time
-from typing import List, Sequence
+from __future__ import annotations
+
+import argparse
+import math
+import time
+from typing import Any, List, Sequence, Tuple, cast
+
 import numpy as np
 import sympy as sp
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from forward.solver import demo_standard_6R
 
 
-def build_T06_symbolic():
+def build_T06_symbolic() -> Tuple[sp.Matrix, list[sp.Symbol]]:
     T06, th_syms, _ = demo_standard_6R()
     return T06, th_syms
 
@@ -14,12 +19,19 @@ def build_T06_symbolic():
 def eval_T_numeric(
     T_sym: sp.Matrix, theta_syms: Sequence[sp.Symbol], q: Sequence[float]
 ) -> sp.Matrix:
-    return sp.N(T_sym.subs({s: float(v) for s, v in zip(theta_syms, q)}), 15)
+    # SymPy typing: cast result to Matrix for mypy.
+    return cast(
+        sp.Matrix,
+        sp.N(  # type: ignore[no-untyped-call]
+            T_sym.subs({s: float(v) for s, v in zip(theta_syms, q)}), 15  # type: ignore[no-untyped-call]
+        ),
+    )
 
 
 def spT_to_np(T: sp.Matrix, unit_scale: float = 1.0) -> np.ndarray:
-    M = np.array(T.tolist(), dtype=float)
-    M[:3, 3] *= float(unit_scale)
+    lst = T.tolist()  # type: ignore[no-untyped-call]
+    M = np.array(lst, dtype=np.float64)
+    M[:3, 3] = M[:3, 3] * float(unit_scale)
     return M
 
 
@@ -33,7 +45,7 @@ def pos_error(MA: np.ndarray, MB: np.ndarray) -> float:
     return float(np.linalg.norm(MA[:3, 3] - MB[:3, 3]))
 
 
-def connect_coppelia(host: str, port: int):
+def connect_coppelia(host: str, port: int) -> tuple[RemoteAPIClient, Any]:
     if RemoteAPIClient is None:
         raise RuntimeError("Install coppeliasim-zmqremoteapi (or zmqRemoteApi)")
     client = RemoteAPIClient(host=host, port=port)
@@ -42,11 +54,11 @@ def connect_coppelia(host: str, port: int):
     return client, sim
 
 
-def get_handle(sim, name: str) -> int:
+def get_handle(sim: Any, name: str) -> int:
     return int(sim.getObject(name))
 
 
-def get_matrix4(sim, obj: int, rel: int | None = None) -> np.ndarray:
+def get_matrix4(sim: Any, obj: int, rel: int | None = None) -> np.ndarray:
     relh = rel if rel is not None else -1
     m = sim.getObjectMatrix(obj, relh)
     M = np.eye(4, dtype=float)
@@ -55,8 +67,8 @@ def get_matrix4(sim, obj: int, rel: int | None = None) -> np.ndarray:
 
 
 def set_joint_positions(
-    sim, joints: List[int], q: Sequence[float], mode: str = "position"
-):
+    sim: Any, joints: List[int], q: Sequence[float], mode: str = "position"
+) -> None:
     if mode not in ("position", "target"):
         raise ValueError("mode must be position|target")
     for h, v in zip(joints, q):
@@ -65,12 +77,16 @@ def set_joint_positions(
         )
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Verify FK against CoppeliaSim via ZMQ")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=23000)
-    p.add_argument("--joint", dest="joints", action="append", 
-                  default=[f"/Robot/Joint{i}" for i in range(1, 7)])
+    p.add_argument(
+        "--joint",
+        dest="joints",
+        action="append",
+        default=[f"/Robot/Joint{i}" for i in range(1, 7)],
+    )
     p.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
     p.add_argument("--base", default=None)
     p.add_argument("--mode", choices=["position", "target"], default="position")
@@ -84,7 +100,7 @@ def parse_args():
     return p.parse_args()
 
 
-def load_q_from_csv(path: str, deg: bool):
+def load_q_from_csv(path: str, deg: bool) -> list[list[float]]:
     data = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
@@ -98,7 +114,7 @@ def load_q_from_csv(path: str, deg: bool):
     return data
 
 
-def main():
+def main() -> int:
     args = parse_args()
     Q = []
     if args.csv:
@@ -141,9 +157,9 @@ def main():
         pe = pos_error(M_fk, M_sim)
         re = rotation_angle_error_deg(M_fk[:3, :3], M_sim[:3, :3])
         ok = (pe <= args.tol_pos) and (re <= args.tol_rot)
-        print(f"\nCase {i+1}: {'PASS' if ok else 'FAIL'}")
+        print(f"\nCase {i + 1}: {'PASS' if ok else 'FAIL'}")
         print("  q (rad):", [round(v, 4) for v in q])
-        print(f"  pos_err: {pe*1000:.3f} mm ({pe:.6f} m)")
+        print(f"  pos_err: {pe * 1000:.3f} mm ({pe:.6f} m)")
         print(f"  rot_err: {re:.3f} deg")
         if ok:
             n_pass += 1
@@ -153,3 +169,4 @@ def main():
     print(
         f"\nSummary: {n_pass}/{len(Q)} passed (tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
     )
+    return 0

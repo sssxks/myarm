@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import math
 import random
-from typing import Iterable, List
+from typing import List, Sequence
 
 import sympy as sp
 
@@ -35,8 +35,8 @@ from forward.solver import (
 from forward.numerical_checker import check_numeric_once
 
 
-def _pprint_matrix(M: sp.Matrix):
-    sp.pprint(M, use_unicode=True)
+def _pprint_matrix(M: sp.Matrix) -> None:
+    sp.pprint(M, use_unicode=True)  # type: ignore[operator]
 
 
 def _deg(v: float) -> float:
@@ -64,14 +64,17 @@ PRESETS_DEG = [
 
 def cmd_symbolic(args: argparse.Namespace) -> int:
     T06, th_syms, params = demo_standard_6R()
-    a = params["a"]; alpha = params["alpha"]; d = params["d"]; theta = params["theta"]
+    a = params["a"]
+    alpha = params["alpha"]
+    d = params["d"]
+    theta = params["theta"]
     if args.steps:
         print("Stepwise Ti (evaluated at rest unless --no-eval):")
         rest = {s: 0.0 for s in th_syms}
         for i in range(6):
             Ti = fk_standard(a[: i + 1], alpha[: i + 1], d[: i + 1], theta[: i + 1])
-            Mi = sp.N(Ti.subs(rest), 6) if args.eval else Ti
-            print(f"\nT0{i+1}:")
+            Mi = sp.N(Ti.subs(rest), 6) if args.eval else Ti  # type: ignore[no-untyped-call]
+            print(f"\nT0{i + 1}:")
             _pprint_matrix(Mi)
         return 0
 
@@ -80,14 +83,15 @@ def cmd_symbolic(args: argparse.Namespace) -> int:
     if args.eval:
         rest = {s: 0.0 for s in th_syms}
         print("\nT06 at rest (rad=0):")
-        _pprint_matrix(sp.N(T06.subs(rest), 6))
+        _pprint_matrix(sp.N(T06.subs(rest), 6))  # type: ignore[no-untyped-call]
 
     if args.euler:
-        a, b, g = T_to_euler_xy_dash_z(T06, safe=False)
+        ea, eb, eg = T_to_euler_xy_dash_z(T06, safe=False)
         print("\nSymbolic XY'Z' (alpha, beta, gamma):")
-        _pprint_matrix(sp.simplify(a))
-        _pprint_matrix(sp.simplify(b))
-        _pprint_matrix(sp.simplify(g))
+        _pprint_matrix(sp.simplify(ea))  # type: ignore[no-untyped-call]
+        _pprint_matrix(sp.simplify(eb))  # type: ignore[no-untyped-call]
+        _pprint_matrix(sp.simplify(eg))  # type: ignore[no-untyped-call]
+        return 0
     return 0
 
 
@@ -108,12 +112,12 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
     for i, row in enumerate(qs, 1):
         subs = {s: float(v) for s, v in zip(th_syms, row)}
-        T_num = sp.N(T06.subs(subs), 15)
+        T_num = sp.N(T06.subs(subs), 15)  # type: ignore[no-untyped-call]
         print(f"\nCase {i}:")
         _pprint_matrix(T_num)
         a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
         print("XY'Z' (rad):", float(a), float(b), float(g))
-        print("XY'Z' (deg):", _deg(a), _deg(b), _deg(g))
+        print("XY'Z' (deg):", _deg(float(a)), _deg(float(b)), _deg(float(g)))
     return 0
 
 
@@ -125,11 +129,11 @@ def cmd_random(args: argparse.Namespace) -> int:
     while printed < n:
         vals = [rng.uniform(-math.pi, math.pi) for _ in th_syms]
         subs = {s: v for s, v in zip(th_syms, vals)}
-        T_num = sp.N(T06.subs(subs), 15)
+        T_num = sp.N(T06.subs(subs), 15)  # type: ignore[no-untyped-call]
         a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
         if abs(math.cos(float(b))) < 1e-6:
             continue  # skip near gimbal lock
-        print(f"\nSample {printed+1}:")
+        print(f"\nSample {printed + 1}:")
         check_numeric_once(T06, subs)
         printed += 1
     return 0
@@ -137,10 +141,10 @@ def cmd_random(args: argparse.Namespace) -> int:
 
 def cmd_dh(_args: argparse.Namespace) -> int:
     _T, _th, params = demo_standard_6R()
-    print("a:", params["a"]) 
-    print("alpha:", params["alpha"]) 
-    print("d:", params["d"]) 
-    print("theta (symbolic):", params["theta"]) 
+    print("a:", params["a"])
+    print("alpha:", params["alpha"])
+    print("d:", params["d"])
+    print("theta (symbolic):", params["theta"])
     return 0
 
 
@@ -150,13 +154,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("symbolic", help="show symbolic T06 or stepwise Ti")
     s.add_argument("--steps", action="store_true", help="show T01..T06")
-    s.add_argument("--no-eval", dest="eval", action="store_false", help="do not eval at rest")
+    s.add_argument(
+        "--no-eval", dest="eval", action="store_false", help="do not eval at rest"
+    )
     s.add_argument("--euler", action="store_true", help="print symbolic XY'Z' angles")
     s.set_defaults(func=cmd_symbolic, eval=True)
 
     e = sub.add_parser("eval", help="evaluate T06 and XY'Z' for angles")
     e.add_argument("--preset", type=int, nargs="*", help="use preset 1..5 (deg)")
-    e.add_argument("--q", nargs=6, type=float, action="append", help="custom angles q1..q6")
+    e.add_argument(
+        "--q", nargs=6, type=float, action="append", help="custom angles q1..q6"
+    )
     e.add_argument("--deg", action="store_true", help="interpret --q in degrees")
     e.set_defaults(func=cmd_eval)
 
@@ -170,12 +178,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def fk_standard(a, alpha, d, theta):  # keep backward import compatibility if used elsewhere
+def fk_standard(
+    a: Sequence[int | float | sp.Expr],
+    alpha: Sequence[int | float | sp.Expr],
+    d: Sequence[int | float | sp.Expr],
+    theta: Sequence[int | float | sp.Expr],
+) -> sp.Matrix:  # keep backward import compatibility if used elsewhere
     from forward.solver import fk_standard as _fk
+
     return _fk(a, alpha, d, theta)
 
 
-def main(argv: Iterable[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
@@ -183,6 +197,3 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-

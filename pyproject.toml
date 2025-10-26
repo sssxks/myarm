@@ -20,3 +20,16 @@ forward = "forward.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "microsoft-python-type-stubs",
+    "mypy>=1.18.2",
+    "pyright>=1.1.407",
+]
+
+[tool.mypy]
+mypy_path = ["type_stubs", "src"]
+
+[tool.uv.sources]
+microsoft-python-type-stubs = { git = "https://github.com/microsoft/python-type-stubs.git" }

@@ -4,7 +4,11 @@ from .solver import (
     T_to_euler_xy_dash_z,
     rot_to_euler_xy_dash_z,
     demo_standard_6R,
-    Rx, Ry, Rz, Tx, Tz,
+    Rx,
+    Ry,
+    Rz,
+    Tx,
+    Tz,
 )
 
 __all__ = [
@@ -13,5 +17,9 @@ __all__ = [
     "T_to_euler_xy_dash_z",
     "rot_to_euler_xy_dash_z",
     "demo_standard_6R",
-    "Rx", "Ry", "Rz", "Tx", "Tz",
+    "Rx",
+    "Ry",
+    "Rz",
+    "Tx",
+    "Tz",
 ]

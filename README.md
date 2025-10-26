@@ -82,6 +82,19 @@ Numerically we handle gimbal lock at `beta = ±π/2` by setting `gamma = 0` and 
 
 All results should match within tolerances (see `report/verification_results.log`).
 
+## Development
+
+Recommended to add this to your `.vscode/settings.json` for strict type checking with custom stubs.
+
+```json
+{
+    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.stubPath": "./type_stubs"
+}
+``` 
+
+you can also use clis like `uv run mypy . --strict`, `uv run pyright`
+
 ## Notes
 
 - Units: DH `a` & `d` are in millimeters. `verify_fk` uses `--unit-scale 0.001` so meters align with CoppeliaSim.
