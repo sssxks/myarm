@@ -1,9 +1,9 @@
+from . import dh_params
 from .solver import (
     fk_standard,
     fk_modified,
     T_to_euler_xy_dash_z,
     rot_to_euler_xy_dash_z,
-    demo_standard_6R,
     Rx,
     Ry,
     Rz,
@@ -16,7 +16,7 @@ __all__ = [
     "fk_modified",
     "T_to_euler_xy_dash_z",
     "rot_to_euler_xy_dash_z",
-    "demo_standard_6R",
+    "dh_params",
     "Rx",
     "Ry",
     "Rz",

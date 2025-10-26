@@ -8,7 +8,7 @@ from typing import Any, List, Sequence, Tuple, cast
 import numpy as np
 import sympy as sp
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from forward.solver import demo_standard_6R
+from forward.dh_params import demo_standard_6R
 
 
 def build_T06_symbolic() -> Tuple[sp.Matrix, list[sp.Symbol]]:

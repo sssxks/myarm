@@ -1,25 +1,4 @@
-[project]
-name = "forward"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-authors = [
-    { name = "ks", email = "2777389616@qq.com" }
-]
-requires-python = ">=3.13"
-dependencies = [
-    "coppeliasim-zmqremoteapi-client>=2.0.4",
-    "numpy>=2.3.4",
-    "sympy>=1.14.0",
-]
-
-[project.scripts]
-verify_fk = "forward.verify_fk_coppelia:main"
-forward = "forward.main:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+## Workspace root (no buildable project here)
 
 [dependency-groups]
 dev = [
@@ -29,7 +8,10 @@ dev = [
 ]
 
 [tool.mypy]
-mypy_path = ["type_stubs", "src"]
+mypy_path = ["stubs"]
 
 [tool.uv.sources]
 microsoft-python-type-stubs = { git = "https://github.com/microsoft/python-type-stubs.git" }
+
+[tool.uv.workspace]
+members = ["packages/*"]

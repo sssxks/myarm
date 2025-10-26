@@ -1,8 +1,9 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/forward/` — library and CLI code: `solver.py` (FK + XY'Z'), `main.py` (CLI), `numerical_checker.py`, `verify_fk_coppelia.py`.
-- `type_stubs/` — extra stubs; included in `mypy_path`.
+- `packages/forward/src/forward/` — library and CLI code: `solver.py` (FK + XY'Z'), `main.py` (CLI), `numerical_checker.py`, `verify_fk_coppelia.py`.
+- `packages/symfun/` — functional-ish facade package scaffold (initialised via `uv init --lib`).
+- `stubs/` — third-party `.pyi` stubs; included in `mypy_path`.
 - `report/` — experiment notes and logs (e.g., `verification_results.log`).
 - `dist/` — build artifacts (do not commit). See `.gitignore`.
 
@@ -11,7 +12,7 @@
 - `uv.exe sync` — create venv and install deps from `pyproject.toml`/`uv.lock`.
 - `uv.exe run forward symbolic|eval|random|dh` — run CLI tasks (see `README.md`).
 - `uv.exe run verify_fk [--deg]` — check FK in CoppeliaSim over ZMQ.
-- `uv.exe run mypy . --strict` and `uv run pyright` — type checking using `type_stubs/`.
+- `uv.exe run mypy . --strict` and `uv run pyright` — type checking using `stubs/`.
 - `uv.exe build` — build wheel/sdist into `dist/`.
 
 ## Coding Style & Naming Conventions

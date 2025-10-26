@@ -24,15 +24,19 @@ from __future__ import annotations
 import argparse
 import math
 import random
-from typing import List, Sequence
+from typing import List, Sequence, TYPE_CHECKING
 
 import sympy as sp
 
+from forward.dh_params import demo_standard_6R
 from forward.solver import (
     T_to_euler_xy_dash_z,
-    demo_standard_6R,
 )
 from forward.numerical_checker import check_numeric_once
+from forward.ik_solver import IKOptions, fk_numeric, solve_ik
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 def _pprint_matrix(M: sp.Matrix) -> None:
@@ -148,6 +152,70 @@ def cmd_dh(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _matrix16_to_np(vals: Sequence[float]) -> 'np.ndarray':
+    import numpy as np  # local import to keep module import light
+
+    if len(vals) != 16:
+        raise SystemExit("--T requires 16 values (row-major 4x4)")
+    M = np.array(list(vals), dtype=float).reshape(4, 4)
+    return M
+
+
+def _build_target_from_q(q: Sequence[float], deg: bool) -> 'np.ndarray':
+    import numpy as np
+
+    if len(q) != 6:
+        raise SystemExit("--from-q requires 6 values")
+    qrad = [math.radians(v) for v in q] if deg else list(q)
+    return fk_numeric(qrad)
+
+
+def cmd_ik(args: argparse.Namespace) -> int:
+    import numpy as np
+
+    T_des: np.ndarray
+    if args.T is not None:
+        T_des = _matrix16_to_np(args.T)
+    elif args.from_q:
+        T_des = _build_target_from_q(args.from_q, args.deg)
+    else:
+        raise SystemExit("Provide either --T 16vals or --from-q q1..q6")
+
+    # Options
+    opts = IKOptions(
+        max_iter=int(args.max_iter),
+        lambda_dls=float(args.lmbda),
+        w_pos=float(args.w_pos),
+        w_rot=float(args.w_rot),
+        tol_pos=float(args.tol_pos),
+        tol_rot=math.radians(float(args.tol_rot_deg)),
+        step_clip=float(args.step_clip),
+    )
+
+    seeds = []
+    if args.seed:
+        for row in args.seed:
+            if len(row) != 6:
+                raise SystemExit("--seed expects 6 values per entry")
+            seeds.append([math.radians(v) for v in row] if args.deg else list(row))
+
+    results = solve_ik(T_des, seeds=seeds or None, opts=opts)
+    if not results:
+        print("No solution found. Try adjusting seeds or tolerances.")
+        return 1
+
+    print("Target T06:")
+    _pprint_matrix(sp.Matrix(T_des.tolist()))
+    print("\nSolutions (up to 8 unique):")
+    for i, (q, pe, re, it) in enumerate(results[: args.limit], 1):
+        qlist = list(float(x) for x in q)
+        qdeg = [round(_deg(v), 3) for v in qlist]
+        print(f"\nSol {i}: iters={it}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
+        print("  q (rad):", [round(v, 6) for v in qlist])
+        print("  q (deg):", qdeg)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="forward", description="Forward kinematics CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -175,6 +243,37 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("dh", help="print DH parameters")
     d.set_defaults(func=cmd_dh)
+
+    k = sub.add_parser("ik", help="inverse kinematics for a target pose")
+    k.add_argument(
+        "--T",
+        nargs=16,
+        type=float,
+        help="target 4x4 (row-major) — 16 values",
+    )
+    k.add_argument(
+        "--from-q",
+        nargs=6,
+        type=float,
+        help="build target from these joints (q1..q6)",
+    )
+    k.add_argument("--deg", action="store_true", help="interpret --from-q/--seed in degrees")
+    k.add_argument(
+        "--seed",
+        nargs=6,
+        type=float,
+        action="append",
+        help="optional initial seed(s) q1..q6 (repeatable)",
+    )
+    k.add_argument("--max-iter", type=int, default=200)
+    k.add_argument("--lmbda", type=float, default=1e-3, help="damping λ")
+    k.add_argument("--w-pos", type=float, default=1.0, help="weight for position (mm)")
+    k.add_argument("--w-rot", type=float, default=200.0, help="weight for rotation (rad)")
+    k.add_argument("--tol-pos", type=float, default=1e-3, help="pos tol (mm)")
+    k.add_argument("--tol-rot-deg", type=float, default=0.1, help="rot tol (deg)")
+    k.add_argument("--step-clip", type=float, default=0.5, help="max |Δq| per iter (rad)")
+    k.add_argument("--limit", type=int, default=8, help="print up to N solutions")
+    k.set_defaults(func=cmd_ik)
     return p
 
 

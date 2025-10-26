@@ -28,6 +28,7 @@ Available commands:
 - `eval`      Evaluate `T06` and XY'Z' for provided joint angles. Use `--preset 1..5` (degrees) or `--q q1 q2 q3 q4 q5 q6` with optional `--deg`.
 - `random`    Run numeric checks that reconstruct `R` from XY'Z' and report errors.
 - `dh`        Print the DH parameter lists used.
+- `ik`        Inverse kinematics (numeric DLS). Provide a target pose as `--T` (16 values, row‑major 4x4) or build from `--from-q`.
 
 ## CoppeliaSim Verification (optional)
 
@@ -53,6 +54,19 @@ Options:
 
 Example output is recorded in `report/verification_results.log`.
 
+For IK verification against CoppeliaSim, use `verify_ik` which reads the current
+tip pose from the sim (in meters), converts to the internal millimeter FK/IK
+frame, solves IK (damped least squares), and optionally applies the best
+solution back to the sim:
+
+```ps1
+uv run verify_ik --apply  # uses current sim pose; applies best solution
+```
+
+Options mirror `verify_fk` and add:
+- `--tol-pos-mm/--tol-rot-deg` IK convergence tolerances
+- `--max-iter/--lmbda`         solver controls
+
 ## Euler Convention (XY'Z')
 
 We use intrinsic XY'Z' Euler angles (equivalently extrinsic Z‑Y‑X). For a rotation block `R`, the non‑singular mapping is:
@@ -67,11 +81,13 @@ Numerically we handle gimbal lock at `beta = ±π/2` by setting `gamma = 0` and 
 
 ## Repo Layout
 
-- `src/forward/solver.py`              Core FK and Euler utilities (+ `demo_standard_6R()`)
-- `src/forward/main.py`                CLI entry (`forward`)
-- `src/forward/numerical_checker.py`   Numeric XY'Z' reconstruction and error metrics
-- `src/forward/verify_fk_coppelia.py`  CoppeliaSim verification (`verify_fk`)
-- `report/`                            Experiment requirements and logs
+- `packages/forward/src/forward/solver.py`              Core FK and Euler utilities (+ `demo_standard_6R()`)
+- `packages/forward/src/forward/main.py`                CLI entry (`forward`)
+- `packages/forward/src/forward/numerical_checker.py`   Numeric XY'Z' reconstruction and error metrics
+- `packages/forward/src/forward/verify_fk_coppelia.py`  CoppeliaSim verification (`verify_fk`)
+- `packages/symfun/`                                     Functional-ish facade (scaffolded)
+- `stubs/`                                               Third-party `.pyi` (e.g., `coppeliasim_zmqremoteapi_client/__init__.pyi`)
+- `report/`                                              Experiment requirements and logs
 
 ## Reproducing the Experiment
 
@@ -89,7 +105,7 @@ Recommended to add this to your `.vscode/settings.json` for strict type checking
 ```json
 {
     "python.analysis.typeCheckingMode": "strict",
-    "python.analysis.stubPath": "./type_stubs"
+    "python.analysis.stubPath": "./stubs"
 }
 ``` 
 

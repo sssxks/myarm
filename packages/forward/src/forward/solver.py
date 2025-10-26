@@ -10,17 +10,11 @@ Functions:
 - T_to_euler_xy_dash_z(T, safe=True)  # convenience wrapper for a 4x4 T
 """
 
-from __future__ import annotations
 import math
-from typing import Iterable, Sequence, Tuple, Union, Any, cast
+from typing import Iterable, Sequence, Union, Any, cast
 import sympy as sp
 
-# Basic numeric or symbolic expression type
-Num = Union[int, float, sp.Expr]
-# Help static type checkers understand SymPy constants
-PI = cast(sp.Expr, sp.pi)
-HALF_PI = cast(sp.Expr, sp.pi / 2)
-
+from .type_utils import Num
 
 def Rx(alpha: Num) -> sp.Matrix:
     ca = cast(sp.Expr, sp.cos(alpha))
@@ -72,7 +66,7 @@ def fk_standard(
     return simplify_T(T) if simplify else T
 
 
-def rot_to_euler_xy_dash_z(R: sp.Matrix) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
+def rot_to_euler_xy_dash_z(R: sp.Matrix) -> tuple[sp.Expr, sp.Expr, sp.Expr]:
     """Return intrinsic XY'Z' Euler angles (alpha, beta, gamma) from a 3x3 rotation.
 
     Convention:
@@ -106,7 +100,7 @@ def rot_to_euler_xy_dash_z(R: sp.Matrix) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
 
 def _rot_to_euler_xy_dash_z_safe(
     R: sp.Matrix, eps: float = 1e-9
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """Numeric-safe XY'Z' extraction with gimbal-lock handling for XY'Z'.
 
     Uses the same mapping as `rot_to_euler_xy_dash_z`, and handles the
@@ -145,7 +139,7 @@ def _rot_to_euler_xy_dash_z_safe(
 
 def T_to_euler_xy_dash_z(
     T: sp.Matrix, safe: bool = True
-) -> Union[Tuple[sp.Expr, sp.Expr, sp.Expr], Tuple[float, float, float]]:
+) -> Union[tuple[sp.Expr, sp.Expr, sp.Expr], tuple[float, float, float]]:
     """Extract intrinsic XY'Z' Euler angles from a 4x4 homogeneous transform.
 
     Parameters
@@ -192,36 +186,3 @@ def fk_modified(
     return simplify_T(T) if simplify else T
 
 
-def demo_standard_6R() -> Tuple[sp.Matrix, list[sp.Symbol], dict[str, list[Num]]]:
-    """Convenience constructor for the ZJU‑I 6‑DoF arm used in this project.
-
-    Returns
-    -------
-    T06 : sympy.Matrix (4x4)
-        Homogeneous transform from base to tool.
-    theta_syms : list[sympy.Symbol]
-        [th1..th6] joint symbols.
-    params : dict
-        Dict with keys ``a``, ``alpha``, ``d``, ``theta`` (the DH lists).
-    """
-    th1, th2, th3, th4, th5, th6 = cast(
-        Tuple[sp.Symbol, sp.Symbol, sp.Symbol, sp.Symbol, sp.Symbol, sp.Symbol],
-        sp.symbols("th1 th2 th3 th4 th5 th6", real=True),
-    )
-    a: list[Num] = [0, 185, 170, 0, 0, 0]
-    alpha: list[Num] = [-HALF_PI, 0, 0, HALF_PI, HALF_PI, 0]
-    d: list[Num] = [230, -54, 0, 77, 77, 85.5]
-    theta: list[Num] = [
-        cast(sp.Expr, th1),
-        cast(sp.Expr, sp.Add(cast(sp.Expr, th2), sp.Mul(-1, HALF_PI))),
-        cast(sp.Expr, th3),
-        cast(sp.Expr, sp.Add(cast(sp.Expr, th4), HALF_PI)),
-        cast(sp.Expr, sp.Add(cast(sp.Expr, th5), HALF_PI)),
-        cast(sp.Expr, th6),
-    ]
-    T06 = fk_standard(a, alpha, d, theta)
-    return (
-        T06,
-        [th1, th2, th3, th4, th5, th6],
-        {"a": a, "alpha": alpha, "d": d, "theta": theta},
-    )
