@@ -10,7 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "coppeliasim-zmqremoteapi-client>=2.0.4",
     "numpy>=2.3.4",
-    "sympy>=1.14.0",
+    "symfun",
 ]
 
 [project.scripts]
@@ -25,3 +25,5 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/forward"]
 
+[tool.uv.sources]
+symfun = { workspace = true }
