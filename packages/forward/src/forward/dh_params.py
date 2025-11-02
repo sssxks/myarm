@@ -1,5 +1,5 @@
-from forward.type_utils import HALF_PI, Num
-from forward.solver import fk_standard
+from .type_utils import HALF_PI, Num
+from .solver import fk_standard
 import sympy as sp
 from typing import cast
 

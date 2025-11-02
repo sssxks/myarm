@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import math
 import time
-from typing import Any, List, Sequence, Tuple, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -32,7 +33,7 @@ def get_matrix4(sim: Any, obj: int, rel: int | None = None) -> np.ndarray:
     return M
 
 
-def get_joint_positions(sim: Any, joints: Sequence[int]) -> List[float]:
+def get_joint_positions(sim: Any, joints: Sequence[int]) -> list[float]:
     return [float(sim.getJointPosition(h)) for h in joints]
 
 

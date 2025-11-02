@@ -9,6 +9,7 @@ dev = [
 
 [tool.mypy]
 mypy_path = ["stubs"]
+warn_unused_ignores = false # pylance is stricter, so we add this
 
 [tool.uv.sources]
 microsoft-python-type-stubs = { git = "https://github.com/microsoft/python-type-stubs.git" }

@@ -24,7 +24,8 @@ from __future__ import annotations
 import argparse
 import math
 import random
-from typing import List, Sequence, TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import sympy as sp
 
@@ -51,7 +52,7 @@ def _rad(v: float) -> float:
     return math.radians(v)
 
 
-def _parse_qs(q_list: List[List[float]], deg: bool) -> List[List[float]]:
+def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[_rad(x) for x in row] for row in q_list]
     return [list(row) for row in q_list]
@@ -102,7 +103,7 @@ def cmd_symbolic(args: argparse.Namespace) -> int:
 def cmd_eval(args: argparse.Namespace) -> int:
     T06, th_syms, _ = demo_standard_6R()
 
-    qs: List[List[float]] = []
+    qs: list[list[float]] = []
     if args.preset:
         for idx in args.preset:
             if not 1 <= idx <= len(PRESETS_DEG):

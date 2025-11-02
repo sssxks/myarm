@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Iterable, List, Sequence, Tuple, cast
+from collections.abc import Iterable, Sequence
 
 import numpy as np
 
@@ -82,8 +82,7 @@ def _angle_diff(a: float, b: float) -> float:
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
 def dh_T(a: float, alpha: float, d: float, theta: float) -> np.ndarray:
     """Standard DH: Rz(theta) Tz(d) Tx(a) Rx(alpha)."""
-    # mypy: matmul on ndarray is typed as Any in older stubs; cast the result
-    return cast(np.ndarray, _rotz(theta) @ _tz(d) @ _tx(a) @ _rotx(alpha))
+    return _rotz(theta) @ _tz(d) @ _tx(a) @ _rotx(alpha)
 
 
 def fk_numeric(q: Sequence[float] | np.ndarray) -> np.ndarray:
@@ -100,10 +99,10 @@ def fk_numeric(q: Sequence[float] | np.ndarray) -> np.ndarray:
     return T
 
 
-def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> List[np.ndarray]:
+def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[np.ndarray]:
     """Return [T00, T01, …, T06] for current q."""
     th = np.asarray(q, dtype=float) + _THETA_OFFSETS
-    Ts: List[np.ndarray] = [np.eye(4)]
+    Ts: list[np.ndarray] = [np.eye(4)]
     T = np.eye(4)
     for i in range(6):
         T = T @ dh_T(float(_A[i]), float(_ALPHA[i]), float(_D[i]), float(th[i]))
@@ -161,7 +160,7 @@ class IKOptions:
 
 def _ik_once_dls(
     T_des: np.ndarray, q0: Sequence[float] | np.ndarray, opts: IKOptions
-) -> Tuple[np.ndarray, float, float, int]:
+) -> tuple[np.ndarray, float, float, int]:
     """Run one DLS solve from seed q0. Returns (q, pos_err, rot_err, iters)."""
     q = np.asarray(q0, dtype=float).copy()
     q = np.array([_wrap_to_pi(float(v)) for v in q], dtype=float)
@@ -225,9 +224,9 @@ def _seed_from_pose(T_des: np.ndarray) -> np.ndarray:
     return q
 
 
-def unique_solutions(solutions: Iterable[np.ndarray], tol: float = 1e-3) -> List[np.ndarray]:
+def unique_solutions(solutions: Iterable[np.ndarray], tol: float = 1e-3) -> list[np.ndarray]:
     """Merge nearly identical angle sets (L_inf metric)."""
-    uniq: List[np.ndarray] = []
+    uniq: list[np.ndarray] = []
     for q in solutions:
         keep = True
         for u in uniq:
@@ -243,7 +242,7 @@ def solve_ik(
     T_des: np.ndarray,
     seeds: Sequence[Sequence[float]] | None = None,
     opts: IKOptions | None = None,
-) -> List[Tuple[np.ndarray, float, float, int]]:
+) -> list[tuple[np.ndarray, float, float, int]]:
     """Try multiple seeds; return converged solutions with metrics.
 
     Returns list of tuples (q, pos_err_mm, rot_err_rad, iters). The list is
@@ -255,7 +254,7 @@ def solve_ik(
         raise ValueError("T_des must be 4x4")
 
     # Default seed set: crude pose‑based + a few canonical postures
-    seed_list: List[np.ndarray] = []
+    seed_list: list[np.ndarray] = []
     if seeds:
         for seed in seeds:
             if len(seed) != 6:
@@ -270,8 +269,8 @@ def solve_ik(
         seed_list.append(np.array([0, math.pi / 3, 0, 0, 0, 0], dtype=float))
         seed_list.append(np.array([0, -math.pi / 3, 0, 0, 0, 0], dtype=float))
 
-    results: List[Tuple[np.ndarray, float, float, int]] = []
-    tried: List[np.ndarray] = []
+    results: list[tuple[np.ndarray, float, float, int]] = []
+    tried: list[np.ndarray] = []
     for s_arr in seed_list:
         # Avoid re‑trying very similar seeds
         if tried and any(float(np.max(np.abs(s_arr - t))) < 1e-3 for t in tried):
@@ -297,7 +296,7 @@ def solve_ik(
 
     # Deduplicate converged solutions and sort by errors
     uni_q = unique_solutions([r[0] for r in converged])
-    out: List[Tuple[np.ndarray, float, float, int]] = []
+    out: list[tuple[np.ndarray, float, float, int]] = []
     for u in uni_q:
         for r in converged:
             if np.allclose(r[0], u, atol=1e-3, rtol=0.0):

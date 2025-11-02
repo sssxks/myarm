@@ -1,4 +1,4 @@
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Sequence
 from _typeshed import Incomplete
 
 __all__ = ['RemoteAPIClient']
@@ -17,7 +17,7 @@ class RemoteAPIClient:
         self,
         host: str = 'localhost',
         port: int = 23000,
-        cntport: Optional[int] = None,
+        cntport: int | None = None,
         *,
         verbose: Any = None,
     ) -> None: ...

@@ -11,7 +11,8 @@ Functions:
 """
 
 import math
-from typing import Iterable, Sequence, Union, Any, cast
+from collections.abc import Iterable, Sequence
+from typing import Any, cast
 import sympy as sp
 
 from .type_utils import Num
@@ -139,7 +140,7 @@ def _rot_to_euler_xy_dash_z_safe(
 
 def T_to_euler_xy_dash_z(
     T: sp.Matrix, safe: bool = True
-) -> Union[tuple[sp.Expr, sp.Expr, sp.Expr], tuple[float, float, float]]:
+) -> tuple[sp.Expr, sp.Expr, sp.Expr] | tuple[float, float, float]:
     """Extract intrinsic XY'Z' Euler angles from a 4x4 homogeneous transform.
 
     Parameters

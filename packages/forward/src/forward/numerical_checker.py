@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Tuple, cast
+from collections.abc import Mapping
+from typing import Any, cast
 
 import numpy as np
 import sympy as sp
@@ -19,7 +20,7 @@ def mat_to_np(M: sp.Matrix) -> np.ndarray:
     return np.array(lst, dtype=np.float64)
 
 
-def check_numeric_once(T06: sp.Matrix, subs_map: Mapping[sp.Symbol, float]) -> Tuple[float, float]:
+def check_numeric_once(T06: sp.Matrix, subs_map: Mapping[sp.Symbol, float]) -> tuple[float, float]:
     # 1) rotation block from T06
     R = R3(T06)
     R_num = sp.N(R.subs(subs_map), 15)  # type: ignore[no-untyped-call]
