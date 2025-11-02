@@ -20,14 +20,26 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from typing import NamedTuple
+from functools import lru_cache
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
 from .dh_params import demo_standard_6R_num
 
+if TYPE_CHECKING:
+    import sympy as sp
+
 # currently, keep it as static var to simplify code
 dh_num = demo_standard_6R_num()
+
+
+@lru_cache(maxsize=1)
+def _symbolic_fk() -> tuple["sp.Matrix", list["sp.Symbol"]]:
+    from .dh_params import demo_standard_6R
+
+    T_sym, th_syms, _ = demo_standard_6R()
+    return T_sym, th_syms
 
 # ---- Small numeric helpers ----
 def _rotz(theta: float) -> np.ndarray:
@@ -57,6 +69,27 @@ def _tx(a: float) -> np.ndarray:
     M[0, 3] = a
     return M
 
+
+def rotation_xy_dash_z(alpha: float, beta: float, gamma: float) -> np.ndarray:
+    """Return rotation matrix for intrinsic XY'Z' (≡ extrinsic Z-Y-X) angles."""
+    ca, sa = math.cos(alpha), math.sin(alpha)
+    cb, sb = math.cos(beta), math.sin(beta)
+    cg, sg = math.cos(gamma), math.sin(gamma)
+
+    Rx = np.array([[1.0, 0.0, 0.0], [0.0, ca, -sa], [0.0, sa, ca]], dtype=float)
+    Ry = np.array([[cb, 0.0, sb], [0.0, 1.0, 0.0], [-sb, 0.0, cb]], dtype=float)
+    Rz = np.array([[cg, -sg, 0.0], [sg, cg, 0.0], [0.0, 0.0, 1.0]], dtype=float)
+    return Rx @ Ry @ Rz
+
+
+def pose_from_xyz_euler(
+    x_mm: float, y_mm: float, z_mm: float, alpha: float, beta: float, gamma: float
+) -> np.ndarray:
+    """Build a homogeneous transform from XYZ translation (mm) and XY'Z' angles (rad)."""
+    T = np.eye(4, dtype=float)
+    T[:3, 3] = np.array([x_mm, y_mm, z_mm], dtype=float)
+    T[:3, :3] = rotation_xy_dash_z(alpha, beta, gamma)
+    return T
 
 def _wrap_to_pi(v: float) -> float:
     """Wrap an angle to [-pi, pi]."""
@@ -121,10 +154,27 @@ def geometric_jacobian(q: Sequence[float] | np.ndarray) -> np.ndarray:
 def rotation_error_vee(R_cur: np.ndarray, R_des: np.ndarray) -> np.ndarray:
     """Return so(3) error vector e such that small e ≈ minimal rotation from R_cur→R_des.
 
-    Uses e = 0.5 * vee(R_des^T R_cur − R_cur^T R_des).
+    Uses the rotation logarithm to stay well-behaved near 180° differences.
     """
-    S = R_des.T @ R_cur - R_cur.T @ R_des
-    return 0.5 * np.array([S[2, 1], S[0, 2], S[1, 0]], dtype=float)
+    R_err = R_des.T @ R_cur
+    angle = rotation_angle(R_cur, R_des)
+    if angle < 1e-9:
+        return np.zeros(3, dtype=float)
+
+    skew = R_err - R_err.T
+    if abs(math.pi - angle) < 1e-3:
+        eigvals, eigvecs = np.linalg.eig(R_err)
+        idx = int(np.argmin(np.abs(eigvals - 1.0)))
+        axis = np.real(eigvecs[:, idx])
+        norm = float(np.linalg.norm(axis))
+        if norm < 1e-9:
+            axis = np.array([1.0, 0.0, 0.0], dtype=float)
+        else:
+            axis = axis / norm
+        return axis * angle
+
+    factor = angle / (2.0 * math.sin(angle))
+    return factor * np.array([skew[2, 1], skew[0, 2], skew[1, 0]], dtype=float)
 
 
 def rotation_angle(RA: np.ndarray, RB: np.ndarray) -> float:
@@ -292,9 +342,38 @@ def solve_ik(
     return out
 
 
+def solve_ik_nsolve(T_des: np.ndarray, guess: Sequence[float]) -> np.ndarray:
+    """Refine an IK guess using SymPy's nsolve."""
+    import sympy as sp
+
+    from .solver import T_to_euler_xy_dash_z
+
+    T_sym, th_syms = _symbolic_fk()
+    T_target = sp.Matrix(T_des.tolist())
+    alpha_sym, beta_sym, gamma_sym = T_to_euler_xy_dash_z(T_sym, safe=False)
+    alpha_tar, beta_tar, gamma_tar = T_to_euler_xy_dash_z(T_target, safe=False)
+    eqs = [
+        T_sym[0, 3] - T_target[0, 3],
+        T_sym[1, 3] - T_target[1, 3],
+        T_sym[2, 3] - T_target[2, 3],
+        alpha_sym - alpha_tar,
+        beta_sym - beta_tar,
+        gamma_sym - gamma_tar,
+    ]
+
+    guess_vec = [float(v) for v in guess]
+    sol = sp.nsolve(eqs, th_syms, guess_vec, tol=1e-12, maxsteps=200)
+    values = [float(_wrap_to_pi(float(s))) for s in sol]
+    return np.array(values, dtype=float)
+
+
 __all__ = [
     "IKOptions",
     "fk_numeric",
     "geometric_jacobian",
+    "pose_from_xyz_euler",
+    "rotation_xy_dash_z",
+    "rotation_angle",
     "solve_ik",
+    "solve_ik_nsolve",
 ]

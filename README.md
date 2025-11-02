@@ -15,6 +15,7 @@ uv sync
 uv run myarm -- fk symbolic           # show symbolic T06
 uv run myarm -- fk eval --preset 1 2  # evaluate presets (degrees)
 uv run myarm -- fk random --count 3   # random numeric checks
+uv run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
 uv run myarm -- ik solve --from-q 0 0 1.57 0 0 0
 ```
 
@@ -29,6 +30,7 @@ All tooling is exposed through `uv run myarm -- <group> <command>`. Key groups:
   - `dh`        Print the DH parameter lists.
 - `ik` – inverse kinematics helpers
   - `solve`     Damped-least-squares IK solver. Provide a target as `--T` (16 row-major values) or `--from-q` (6 joints). Optional seeds via repeatable `--seed`.
+  - `euler`     Analytic + numeric IK for XYZ + intrinsic XY'Z' Euler targets. Accepts `--target x y z α β γ` with `--pos-unit m|mm`, `--deg`, and `--nsolve` for SymPy refinement.
 - `verify` – CoppeliaSim validation utilities
   - `fk`        Mirror of the previous `verify_fk` script.
   - `ik`        Mirror of the previous `verify_ik` script.
@@ -50,7 +52,7 @@ uv run myarm -- verify fk --q 30 0 90 60 0 0 --deg
 uv run myarm -- verify ik --apply
 ```
 
-Common flags include `--host/--port`, repeatable `--joint`, `--tip`, `--base`, `--deg`, `--unit-scale`, `--tol-pos`, and `--tol-rot`. IK verification also supports `--tol-pos-mm`, `--tol-rot-deg`, `--max-iter`, and `--lmbda`. Example logs are stored in `report/verification_results.log`.
+Common flags include `--host/--port`, repeatable `--joint`, `--tip`, `--base`, `--deg`, `--unit-scale`, `--tol-pos`, and `--tol-rot`. IK verification also supports `--tol-pos-mm`, `--tol-rot-deg`, `--max-iter`, and `--lmbda`. Example logs are stored in `report/lab4/verification_results.log`.
 
 ## Euler Convention (XY'Z')
 
@@ -82,7 +84,11 @@ When `beta = ±π/2`, the CLI switches to a gimbal-lock-safe reconstruction by c
 3. Run numeric checks: `uv run myarm -- fk random --count 5`
 4. (Optional) Verify in CoppeliaSim: `uv run myarm -- verify fk --deg`
 
-All expected tolerances and outputs are documented in `report/verification_results.log`.
+All expected tolerances and outputs are documented in `report/lab4/verification_results.log`.
+
+- Solve lab4 IK poses directly from task-space targets: `uv run myarm -- ik euler --target …`.
+- Batch replay the assignment cases against CoppeliaSim: `uv run python scripts/verify_cases.py` (results in `report/lab4/verification_results.log`).
+- 解析推导、命令及实验记录汇总：`report/lab4/report.md` 与生成的 `report/3230102841-2-项科深.pdf`.
 
 ## Development Notes
 

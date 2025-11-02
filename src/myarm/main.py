@@ -29,7 +29,14 @@ from typing import TYPE_CHECKING
 import sympy as sp
 
 from myarm.dh_params import demo_standard_6R
-from myarm.ik_solver import IKOptions, fk_numeric, solve_ik
+from myarm.ik_solver import (
+    IKOptions,
+    fk_numeric,
+    pose_from_xyz_euler,
+    rotation_angle,
+    solve_ik,
+    solve_ik_nsolve,
+)
 from myarm.numerical_checker import check_numeric_once
 from myarm.solver import T_to_euler_xy_dash_z
 from myarm.verify_fk_coppelia import configure_parser as configure_verify_fk_parser
@@ -57,6 +64,10 @@ def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[_rad(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
+
+
+def _wrap_angles(values: Sequence[float]) -> list[float]:
+    return [((v + math.pi) % (2 * math.pi)) - math.pi for v in values]
 
 
 PRESETS_DEG = [
@@ -153,6 +164,62 @@ def cmd_fk_dh(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_ik_options(args: argparse.Namespace) -> IKOptions:
+    return IKOptions(
+        max_iter=int(args.max_iter),
+        lambda_dls=float(args.lmbda),
+        w_pos=float(args.w_pos),
+        w_rot=float(args.w_rot),
+        tol_pos=float(args.tol_pos),
+        tol_rot=math.radians(float(args.tol_rot_deg)),
+        step_clip=float(args.step_clip),
+    )
+
+
+def _collect_seeds(args: argparse.Namespace, deg: bool) -> list[list[float]]:
+    seeds: list[list[float]] = []
+    rows = getattr(args, "seed", None)
+    if rows:
+        for row in rows:
+            if len(row) != 6:
+                raise SystemExit("--seed expects 6 values per entry")
+            converted = [_rad(v) for v in row] if deg else [float(v) for v in row]
+            seeds.append(converted)
+    return seeds
+
+
+def _print_ik_solutions(T_des: "np.ndarray", results: list[tuple["np.ndarray", float, float, int]], limit: int) -> None:
+    print("Target T06:")
+    _pprint_matrix(sp.Matrix(T_des.tolist()))
+    print("\nSolutions (up to 8 unique):")
+    for i, (q, pe, re, it) in enumerate(results[:limit], 1):
+        qlist = [float(x) for x in q]
+        qdeg = [round(_deg(v), 3) for v in qlist]
+        iter_label = f"iters={it}" if it >= 0 else "iters=nsolve"
+        print(f"\nSol {i}: {iter_label}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
+        print("  q (rad):", [round(v, 6) for v in qlist])
+        print("  q (deg):", qdeg)
+
+
+def _add_ik_common_arguments(parser: argparse.ArgumentParser, deg_help: str) -> None:
+    parser.add_argument("--deg", action="store_true", help=deg_help)
+    parser.add_argument(
+        "--seed",
+        nargs=6,
+        type=float,
+        action="append",
+        help="optional initial seed(s) q1..q6 (repeatable)",
+    )
+    parser.add_argument("--max-iter", type=int, default=200)
+    parser.add_argument("--lmbda", type=float, default=1e-3, help="damping λ")
+    parser.add_argument("--w-pos", type=float, default=1.0, help="weight for position (mm)")
+    parser.add_argument("--w-rot", type=float, default=200.0, help="weight for rotation (rad)")
+    parser.add_argument("--tol-pos", type=float, default=1e-3, help="pos tol (mm)")
+    parser.add_argument("--tol-rot-deg", type=float, default=0.1, help="rot tol (deg)")
+    parser.add_argument("--step-clip", type=float, default=0.5, help="max |Δq| per iter (rad)")
+    parser.add_argument("--limit", type=int, default=8, help="print up to N solutions")
+
+
 def _matrix16_to_np(vals: Sequence[float]) -> "np.ndarray":
     import numpy as np  # local import to keep module import light
 
@@ -172,8 +239,6 @@ def _build_target_from_q(q: Sequence[float], deg: bool) -> "np.ndarray":
 
 
 def cmd_ik_solve(args: argparse.Namespace) -> int:
-    import numpy as np
-
     if args.T is not None:
         T_des = _matrix16_to_np(args.T)
     elif args.from_q:
@@ -181,37 +246,13 @@ def cmd_ik_solve(args: argparse.Namespace) -> int:
     else:
         raise SystemExit("Provide either --T 16vals or --from-q q1..q6")
 
-    options = IKOptions(
-        max_iter=int(args.max_iter),
-        lambda_dls=float(args.lmbda),
-        w_pos=float(args.w_pos),
-        w_rot=float(args.w_rot),
-        tol_pos=float(args.tol_pos),
-        tol_rot=math.radians(float(args.tol_rot_deg)),
-        step_clip=float(args.step_clip),
-    )
-
-    seeds = []
-    if args.seed:
-        for row in args.seed:
-            if len(row) != 6:
-                raise SystemExit("--seed expects 6 values per entry")
-            seeds.append([math.radians(v) for v in row] if args.deg else list(row))
-
+    options = _build_ik_options(args)
+    seeds = _collect_seeds(args, args.deg)
     results = solve_ik(T_des, seeds=seeds or None, opts=options)
     if not results:
         print("No solution found. Try adjusting seeds or tolerances.")
         return 1
-
-    print("Target T06:")
-    _pprint_matrix(sp.Matrix(T_des.tolist()))
-    print("\nSolutions (up to 8 unique):")
-    for i, (q, pe, re, it) in enumerate(results[: args.limit], 1):
-        qlist = list(float(x) for x in q)
-        qdeg = [round(_deg(v), 3) for v in qlist]
-        print(f"\nSol {i}: iters={it}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
-        print("  q (rad):", [round(v, 6) for v in qlist])
-        print("  q (deg):", qdeg)
+    _print_ik_solutions(T_des, results, int(args.limit))
     return 0
 
 
@@ -221,6 +262,108 @@ def cmd_verify_fk(args: argparse.Namespace) -> int:
 
 def cmd_verify_ik(args: argparse.Namespace) -> int:
     return run_verify_ik(args)
+
+
+def cmd_ik_euler(args: argparse.Namespace) -> int:
+    if len(args.target) != 6:
+        raise SystemExit("--target expects 6 values: x y z alpha beta gamma")
+
+    x, y, z, alpha, beta, gamma = (float(v) for v in args.target)
+    pos_unit = args.pos_unit.lower()
+    if pos_unit == "m":
+        scale = 1000.0
+    elif pos_unit == "mm":
+        scale = 1.0
+    else:
+        raise SystemExit("--pos-unit must be 'm' or 'mm'")
+
+    x_mm, y_mm, z_mm = (scale * v for v in (x, y, z))
+    if args.deg:
+        alpha_r, beta_r, gamma_r = (_rad(alpha), _rad(beta), _rad(gamma))
+    else:
+        alpha_r, beta_r, gamma_r = (alpha, beta, gamma)
+
+    T_des = pose_from_xyz_euler(x_mm, y_mm, z_mm, alpha_r, beta_r, gamma_r)
+    options = _build_ik_options(args)
+    seeds = _collect_seeds(args, args.deg)
+    results = solve_ik(T_des, seeds=seeds or None, opts=options)
+    if not results:
+        print("No solution found. Try adjusting seeds or tolerances.")
+        return 1
+    limit = int(args.limit)
+
+    if args.nsolve:
+        import numpy as np
+
+        candidate_entries: list[tuple[np.ndarray, float, float]] = [
+            (np.asarray(q, dtype=float), pe, re) for q, pe, re, _ in results
+        ]
+        candidate_qs = [entry[0] for entry in candidate_entries]
+        if options.w_rot > 1e-6:
+            trans_opts = IKOptions(
+                max_iter=options.max_iter,
+                lambda_dls=options.lambda_dls,
+                w_pos=options.w_pos,
+                w_rot=1e-6,
+                tol_pos=options.tol_pos,
+                tol_rot=options.tol_rot,
+                step_clip=options.step_clip,
+            )
+            trans_results = solve_ik(T_des, seeds=seeds or None, opts=trans_opts)
+            for q_trans, pe_t, re_t, _ in trans_results:
+                if any(np.allclose(q_trans, cand, atol=1e-3, rtol=0.0) for cand in candidate_qs):
+                    continue
+                arr = np.asarray(q_trans, dtype=float)
+                candidate_entries.append((arr, pe_t, re_t))
+                candidate_qs.append(arr)
+
+        candidate_entries.sort(key=lambda entry: (entry[1], entry[2]))
+        ordered = candidate_entries
+        candidates = [entry[0] for entry in (ordered[:limit] if limit > 0 else ordered)]
+        attempted = len(candidates)
+        refined: list[tuple["np.ndarray", float, float, int]] = []
+        failures = 0
+        offsets = [
+            np.zeros(6, dtype=float),
+            np.array([0.0, 0.0, 0.0, math.pi, 0.0, 0.0], dtype=float),
+            np.array([0.0, 0.0, 0.0, 0.0, math.pi, 0.0], dtype=float),
+            np.array([0.0, 0.0, 0.0, 0.0, 0.0, math.pi], dtype=float),
+            np.array([0.0, 0.0, 0.0, math.pi, math.pi, 0.0], dtype=float),
+            np.array([0.0, 0.0, 0.0, math.pi, 0.0, math.pi], dtype=float),
+            np.array([0.0, 0.0, 0.0, 0.0, math.pi, math.pi], dtype=float),
+        ]
+        for q in candidates:
+            success = False
+            for offset in offsets:
+                variant = _wrap_angles((q + offset).tolist())
+                try:
+                    q_ref = solve_ik_nsolve(T_des, variant)
+                except Exception:
+                    continue
+                if any(np.allclose(q_ref, existing[0], atol=1e-6, rtol=0.0) for existing in refined):
+                    success = True
+                    break
+                T_fk = fk_numeric(q_ref)
+                pos_err = float(np.linalg.norm(T_fk[:3, 3] - T_des[:3, 3]))
+                rot_err = rotation_angle(T_fk[:3, :3], T_des[:3, :3])
+                refined.append((q_ref, pos_err, rot_err, -1))
+                success = True
+                break
+            if not success:
+                failures += 1
+        if refined:
+            results = refined
+        if attempted:
+            print(f"\nNsolve refinement: {len(refined)} succeeded, {failures} failed.")
+
+    xyz_mm = [round(v, 3) for v in (x_mm, y_mm, z_mm)]
+    euler_rad = [round(v, 6) for v in (alpha_r, beta_r, gamma_r)]
+    euler_deg = [round(_deg(v), 3) for v in (alpha_r, beta_r, gamma_r)]
+    print(f"Target XYZ (mm): {xyz_mm}")
+    print("Euler (rad):", euler_rad)
+    print("Euler (deg):", euler_deg)
+    _print_ik_solutions(T_des, results, limit)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -263,23 +406,31 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         help="build target from these joints (q1..q6)",
     )
-    ik_solve.add_argument("--deg", action="store_true", help="interpret --from-q/--seed in degrees")
-    ik_solve.add_argument(
-        "--seed",
+    _add_ik_common_arguments(ik_solve, "interpret --from-q/--seed in degrees")
+    ik_solve.set_defaults(func=cmd_ik_solve)
+
+    ik_euler = ik_sub.add_parser("euler", help="inverse kinematics for XY'Z' target pose")
+    ik_euler.add_argument(
+        "--target",
         nargs=6,
         type=float,
-        action="append",
-        help="optional initial seed(s) q1..q6 (repeatable)",
+        required=True,
+        metavar=("x", "y", "z", "alpha", "beta", "gamma"),
+        help="x y z (pos-unit) and XY'Z' Euler angles (rad by default)",
     )
-    ik_solve.add_argument("--max-iter", type=int, default=200)
-    ik_solve.add_argument("--lmbda", type=float, default=1e-3, help="damping λ")
-    ik_solve.add_argument("--w-pos", type=float, default=1.0, help="weight for position (mm)")
-    ik_solve.add_argument("--w-rot", type=float, default=200.0, help="weight for rotation (rad)")
-    ik_solve.add_argument("--tol-pos", type=float, default=1e-3, help="pos tol (mm)")
-    ik_solve.add_argument("--tol-rot-deg", type=float, default=0.1, help="rot tol (deg)")
-    ik_solve.add_argument("--step-clip", type=float, default=0.5, help="max |Δq| per iter (rad)")
-    ik_solve.add_argument("--limit", type=int, default=8, help="print up to N solutions")
-    ik_solve.set_defaults(func=cmd_ik_solve)
+    ik_euler.add_argument(
+        "--pos-unit",
+        choices=("m", "mm"),
+        default="m",
+        help="units for x y z (default: meters)",
+    )
+    ik_euler.add_argument(
+        "--nsolve",
+        action="store_true",
+        help="refine solutions via sympy.nsolve starting from numeric IK",
+    )
+    _add_ik_common_arguments(ik_euler, "interpret Euler angles and --seed in degrees")
+    ik_euler.set_defaults(func=cmd_ik_euler)
 
     verify = sub.add_parser("verify", help="compare against CoppeliaSim")
     verify_sub = verify.add_subparsers(dest="verify_command", required=True)
