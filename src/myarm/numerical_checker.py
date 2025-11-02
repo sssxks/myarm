@@ -7,7 +7,7 @@ from typing import Any, cast
 import numpy as np
 import sympy as sp
 
-from forward.solver import Rx, Ry, Rz, T_to_euler_xy_dash_z
+from myarm.solver import Rx, Ry, Rz, T_to_euler_xy_dash_z
 
 
 def R3(M: sp.Matrix) -> sp.Matrix:

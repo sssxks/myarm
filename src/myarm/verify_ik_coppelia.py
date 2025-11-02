@@ -9,7 +9,7 @@ from typing import Any, cast
 import numpy as np
 
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from forward.ik_solver import IKOptions, fk_numeric, solve_ik
+from myarm.ik_solver import IKOptions, fk_numeric, solve_ik
 
 
 def connect_coppelia(host: str, port: int) -> tuple[RemoteAPIClient, Any]:
@@ -48,8 +48,30 @@ def rotation_angle_deg(RA: np.ndarray, RB: np.ndarray) -> float:
     return math.degrees(math.acos(tr))
 
 
-def parse_args() -> argparse.Namespace:
+def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=23000)
+    parser.add_argument(
+        "--joint",
+        dest="joints",
+        action="append",
+        default=[f"/Robot/Joint{i}" for i in range(1, 7)],
+    )
+    parser.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
+    parser.add_argument("--base", default=None)
+    parser.add_argument("--unit-scale", type=float, default=0.001, help="FK(mm)↔Sim(m)")
+    parser.add_argument("--tol-pos-mm", type=float, default=1e-2)
+    parser.add_argument("--tol-rot-deg", type=float, default=0.2)
+    parser.add_argument("--max-iter", type=int, default=200)
+    parser.add_argument("--lmbda", type=float, default=1e-3)
+    parser.add_argument("--sleep", type=float, default=0.05)
+    parser.add_argument("--apply", action="store_true", help="apply best IK q to sim")
+    return parser
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Verify IK against CoppeliaSim via ZMQ")
+    configure_parser(p)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=23000)
     p.add_argument(
@@ -66,12 +88,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-iter", type=int, default=200)
     p.add_argument("--lmbda", type=float, default=1e-3)
     p.add_argument("--sleep", type=float, default=0.05)
-    p.add_argument("--apply", action="store_true", help="apply best IK q to sim")
-    return p.parse_args()
+    return p
 
 
-def main() -> int:
-    args = parse_args()
+def run_verify_ik(args: argparse.Namespace) -> int:
     _, sim = connect_coppelia(args.host, args.port)
     if len(args.joints) != 6:
         raise SystemExit(f"Expected 6 joints, got {len(args.joints)}")
@@ -129,6 +149,12 @@ def main() -> int:
         print(M_after)
 
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return run_verify_ik(args)
 
 
 if __name__ == "__main__":

@@ -1,75 +1,60 @@
-# Forward Kinematics (ZJU‑I Arm)
+# myarm Manipulator Toolkit
 
-This repo provides a small, reproducible setup to derive and verify the forward kinematics of a 6‑DoF desktop arm (ZJU‑I). It includes:
-
-- Symbolic FK via standard DH parameters (SymPy)
-- A CLI for inspecting symbolic forms and evaluating joint sets
-- Numeric reconstruction checks for intrinsic XY'Z' Euler angles
-- Optional verification against CoppeliaSim over ZMQ
+This project provides symbolic and numeric tooling for a 6‑DoF desktop arm (ZJU‑I) including forward and inverse kinematics, Euler angle helpers, and CoppeliaSim verification hooks. The command-line interface has been consolidated under a single `myarm` entry point.
 
 ## Quick Start
 
-Prereqs:
+Prerequisites:
 - Python ≥ 3.13
-- Recommended: [uv](https://github.com/astral-sh/uv) for fast, reproducible runs
+- [uv](https://github.com/astral-sh/uv) (recommended for reproducible environments). On Windows use `uv.exe`.
 
-Create the environment and run the CLI (Windows users can replace `uv` with `uv.exe`):
-
-```ps1
-uv sync # (optional) creates venv and installs deps
-uv run forward symbolic           # show symbolic T06
-uv run forward eval --preset 1 2  # evaluate presets (degrees)
-uv run forward random --count 3   # random numeric checks
-```
-
-Available commands:
-
-- `symbolic`  Show symbolic `T06`. Add `--steps` for `T01..T06`. Add `--euler` to print the symbolic XY'Z' formulas. Use `--no-eval` to avoid substituting the zero pose.
-- `eval`      Evaluate `T06` and XY'Z' for provided joint angles. Use `--preset 1..5` (degrees) or `--q q1 q2 q3 q4 q5 q6` with optional `--deg`.
-- `random`    Run numeric checks that reconstruct `R` from XY'Z' and report errors.
-- `dh`        Print the DH parameter lists used.
-- `ik`        Inverse kinematics (numeric DLS). Provide a target pose as `--T` (16 values, row‑major 4x4) or build from `--from-q`.
-
-## CoppeliaSim Verification (optional)
-
-The script `verify_fk` connects to CoppeliaSim via ZMQ, sets joints, reads the tip pose, and compares it with the symbolic FK.
-
-1) Start CoppeliaSim with the ZMQ remote API server enabled (default: `127.0.0.1:23000`). Ensure your scene exposes joint names similar to `/Robot/Joint1..6` and a tip object like `/Robot/SuctionCup/SuctionCup_connect`.
-2) From the repo root, run:
+Create the environment and explore the CLI:
 
 ```ps1
-uv run verify_fk
-
-# or provide your own sets
-uv run verify_fk --q 30 0 90 60 0 0 --deg
+uv sync
+uv run myarm -- fk symbolic           # show symbolic T06
+uv run myarm -- fk eval --preset 1 2  # evaluate presets (degrees)
+uv run myarm -- fk random --count 3   # random numeric checks
+uv run myarm -- ik solve --from-q 0 0 1.57 0 0 0
 ```
 
-Options:
-- `--host/--port`    ZMQ endpoint
-- `--joint`          Repeatable; 6 joint paths (defaults match the provided scene)
-- `--tip/--base`     Tip (and optional base) object paths
-- `--deg`            Interpret inputs in degrees (else radians)
-- `--unit-scale`     Scale factor for translation (e.g., 0.001 if FK is in mm but sim in m)
-- `--tol-pos/--tol-rot`  Tolerances for pass/fail
+### CLI Overview
 
-Example output is recorded in `report/verification_results.log`.
+All tooling is exposed through `uv run myarm -- <group> <command>`. Key groups:
 
-For IK verification against CoppeliaSim, use `verify_ik` which reads the current
-tip pose from the sim (in meters), converts to the internal millimeter FK/IK
-frame, solves IK (damped least squares), and optionally applies the best
-solution back to the sim:
+- `fk` – forward kinematics utilities
+  - `symbolic`  Show symbolic `T06`; add `--steps` for `T01..T06`, `--euler` for symbolic XY'Z' Euler angles, `--no-eval` to skip evaluation at the rest pose.
+  - `eval`      Evaluate `T06` and XY'Z' for provided joint sets via `--preset 1..5` or `--q q1..q6` (combine with `--deg`).
+  - `random`    Run random numeric checks that reconstruct `R` from XY'Z' while avoiding gimbal lock.
+  - `dh`        Print the DH parameter lists.
+- `ik` – inverse kinematics helpers
+  - `solve`     Damped-least-squares IK solver. Provide a target as `--T` (16 row-major values) or `--from-q` (6 joints). Optional seeds via repeatable `--seed`.
+- `verify` – CoppeliaSim validation utilities
+  - `fk`        Mirror of the previous `verify_fk` script.
+  - `ik`        Mirror of the previous `verify_ik` script.
+
+Run `uv run myarm -- <group> <command> --help` for detailed arguments.
+
+## CoppeliaSim Verification
+
+The verification subcommands connect to CoppeliaSim through the ZMQ remote API and compare simulated results with the symbolic / numeric solvers.
+
+1. Launch CoppeliaSim with the remote API server active (default `127.0.0.1:23000`). Ensure joint objects are named `/Robot/Joint1..6` and the tool frame matches `/Robot/SuctionCup/SuctionCup_connect` or pass custom paths.
+2. From the repo root, run:
 
 ```ps1
-uv run verify_ik --apply  # uses current sim pose; applies best solution
+uv run myarm -- verify fk
+# Provide custom joint sets (degrees)
+uv run myarm -- verify fk --q 30 0 90 60 0 0 --deg
+# Verify IK using the current simulator pose and apply the best solution
+uv run myarm -- verify ik --apply
 ```
 
-Options mirror `verify_fk` and add:
-- `--tol-pos-mm/--tol-rot-deg` IK convergence tolerances
-- `--max-iter/--lmbda`         solver controls
+Common flags include `--host/--port`, repeatable `--joint`, `--tip`, `--base`, `--deg`, `--unit-scale`, `--tol-pos`, and `--tol-rot`. IK verification also supports `--tol-pos-mm`, `--tol-rot-deg`, `--max-iter`, and `--lmbda`. Example logs are stored in `report/verification_results.log`.
 
 ## Euler Convention (XY'Z')
 
-We use intrinsic XY'Z' Euler angles (equivalently extrinsic Z‑Y‑X). For a rotation block `R`, the non‑singular mapping is:
+We use intrinsic XY'Z' Euler angles (equivalently extrinsic Z‑Y‑X). For a rotation block `R`:
 
 ```
 beta  = asin( r13 )
@@ -77,41 +62,38 @@ alpha = atan2(-r23, r33)
 gamma = atan2(-r12, r11)
 ```
 
-Numerically we handle gimbal lock at `beta = ±π/2` by setting `gamma = 0` and folding yaw into `alpha`.
+When `beta = ±π/2`, the CLI switches to a gimbal-lock-safe reconstruction by clamping `gamma` to zero and folding yaw into `alpha`.
 
-## Repo Layout
+## Project Layout
 
-- `packages/forward/src/forward/solver.py`              Core FK and Euler utilities (+ `demo_standard_6R()`)
-- `packages/forward/src/forward/main.py`                CLI entry (`forward`)
-- `packages/forward/src/forward/numerical_checker.py`   Numeric XY'Z' reconstruction and error metrics
-- `packages/forward/src/forward/verify_fk_coppelia.py`  CoppeliaSim verification (`verify_fk`)
-- `packages/symfun/`                                     Functional-ish facade (scaffolded)
-- `stubs/`                                               Third-party `.pyi` (e.g., `coppeliasim_zmqremoteapi_client/__init__.pyi`)
-- `report/`                                              Experiment requirements and logs
+- `src/myarm/solver.py`                Core FK helpers (`fk_standard`, XY'Z' utilities, demo setup)
+- `src/myarm/main.py`                  Unified CLI entry point (`myarm`)
+- `src/myarm/numerical_checker.py`     Numeric XY'Z' reconstruction checks
+- `src/myarm/ik_solver.py`             Damped least-squares IK implementation
+- `src/myarm/verify_fk_coppelia.py`    FK verification helpers (reused by CLI)
+- `src/myarm/verify_ik_coppelia.py`    IK verification helpers (reused by CLI)
+- `report/`                            Experiment logs and notes
+- `typings/`                           Third-party `.pyi` stubs (added to `mypy_path`)
 
 ## Reproducing the Experiment
 
-1) Inspect symbolic FK: `uv run forward symbolic --euler`
-2) Evaluate the 5 assignment sets: `uv run forward eval --preset 1 2 3 4 5 --deg`
-3) Run numeric checks: `uv run forward random --count 5`
-4) If available, verify in CoppeliaSim: `uv run verify_fk --deg`
+1. Inspect symbolic FK: `uv run myarm -- fk symbolic --euler`
+2. Evaluate the five preset configurations: `uv run myarm -- fk eval --preset 1 2 3 4 5 --deg`
+3. Run numeric checks: `uv run myarm -- fk random --count 5`
+4. (Optional) Verify in CoppeliaSim: `uv run myarm -- verify fk --deg`
 
-All results should match within tolerances (see `report/verification_results.log`).
+All expected tolerances and outputs are documented in `report/verification_results.log`.
 
-## Development
+## Development Notes
 
-Recommended to add this to your `.vscode/settings.json` for strict type checking with custom stubs.
+- Run static checks with `uv run mypy . --strict` or `uv run pyright`.
+- DH parameters use millimeters. CoppeliaSim verification defaults to `--unit-scale 0.001` to convert to meters.
+- Avoid `|cos(beta)| ≈ 0` for XY'Z' to stay away from singularities during random sampling.
+- Recommended VS Code settings:
 
 ```json
 {
     "python.analysis.typeCheckingMode": "strict",
-    "python.analysis.stubPath": "./stubs"
+    "python.analysis.stubPath": "./typings"
 }
-``` 
-
-you can also use clis like `uv run mypy . --strict`, `uv run pyright`
-
-## Notes
-
-- Units: DH `a` & `d` are in millimeters. `verify_fk` uses `--unit-scale 0.001` so meters align with CoppeliaSim.
-- Singularities: Avoid `|cos(beta)| ≈ 0` for XY'Z' to prevent gimbal lock in numeric paths.
+```

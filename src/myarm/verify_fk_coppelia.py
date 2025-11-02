@@ -9,7 +9,7 @@ from typing import Any, cast
 import numpy as np
 import sympy as sp
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
-from forward.dh_params import demo_standard_6R
+from myarm.dh_params import demo_standard_6R
 
 
 def build_T06_symbolic() -> tuple[sp.Matrix, list[sp.Symbol]]:
@@ -78,27 +78,32 @@ def set_joint_positions(
         )
 
 
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Verify FK against CoppeliaSim via ZMQ")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=23000)
-    p.add_argument(
+def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=23000)
+    parser.add_argument(
         "--joint",
         dest="joints",
         action="append",
         default=[f"/Robot/Joint{i}" for i in range(1, 7)],
     )
-    p.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
-    p.add_argument("--base", default=None)
-    p.add_argument("--mode", choices=["position", "target"], default="position")
-    p.add_argument("--sleep", type=float, default=0.05)
-    p.add_argument("--unit-scale", type=float, default=0.001)
-    p.add_argument("--tol-pos", type=float, default=1e-3)
-    p.add_argument("--tol-rot", type=float, default=0.5)
-    p.add_argument("--deg", action="store_true")
-    p.add_argument("--q", nargs=6, action="append", type=float, default=None)
-    p.add_argument("--csv", default=None)
-    return p.parse_args()
+    parser.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
+    parser.add_argument("--base", default=None)
+    parser.add_argument("--mode", choices=["position", "target"], default="position")
+    parser.add_argument("--sleep", type=float, default=0.05)
+    parser.add_argument("--unit-scale", type=float, default=0.001)
+    parser.add_argument("--tol-pos", type=float, default=1e-3)
+    parser.add_argument("--tol-rot", type=float, default=0.5)
+    parser.add_argument("--deg", action="store_true")
+    parser.add_argument("--q", nargs=6, action="append", type=float, default=None)
+    parser.add_argument("--csv", default=None)
+    return parser
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Verify FK against CoppeliaSim via ZMQ")
+    configure_parser(p)
+    return p
 
 
 def load_q_from_csv(path: str, deg: bool) -> list[list[float]]:
@@ -115,8 +120,7 @@ def load_q_from_csv(path: str, deg: bool) -> list[list[float]]:
     return data
 
 
-def main() -> int:
-    args = parse_args()
+def run_verify_fk(args: argparse.Namespace) -> int:
     Q = []
     if args.csv:
         Q = load_q_from_csv(args.csv, args.deg)
@@ -171,3 +175,9 @@ def main() -> int:
         f"\nSummary: {n_pass}/{len(Q)} passed (tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
     )
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return run_verify_fk(args)

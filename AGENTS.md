@@ -1,18 +1,18 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `packages/forward/src/forward/` — library and CLI code: `solver.py` (FK + XY'Z'), `main.py` (CLI), `numerical_checker.py`, `verify_fk_coppelia.py`.
+- `src/myarm/` — library and CLI code: `solver.py` (FK + XY'Z'), `main.py` (unified CLI), `numerical_checker.py`, `verify_fk_coppelia.py`.
 - `packages/symfun/` — functional-ish facade package scaffold (initialised via `uv init --lib`).
-- `stubs/` — third-party `.pyi` stubs; included in `mypy_path`.
+- `typings/` — third-party `.pyi` stubs; included in `mypy_path`.
 - `report/` — experiment notes and logs (e.g., `verification_results.log`).
 - `dist/` — build artifacts (do not commit). See `.gitignore`.
 
 ## Build, Test, and Development Commands
 - Note `.venv` is currently generated in Windows. so always use `uv.exe` to run commands.
 - `uv.exe sync` — create venv and install deps from `pyproject.toml`/`uv.lock`.
-- `uv.exe run forward symbolic|eval|random|dh` — run CLI tasks (see `README.md`).
-- `uv.exe run verify_fk [--deg]` — check FK in CoppeliaSim over ZMQ.
-- `uv.exe run mypy . --strict` and `uv run pyright` — type checking using `stubs/`.
+- `uv.exe run myarm -- fk symbolic|eval|random|dh` — run CLI tasks (see `README.md`).
+- `uv.exe run myarm -- verify fk [--deg]` — check FK in CoppeliaSim over ZMQ.
+- `uv.exe run mypy . --strict` and `uv run pyright` — type checking using `typings/`.
 - `uv.exe build` — build wheel/sdist into `dist/`.
 
 ## Coding Style & Naming Conventions
@@ -23,8 +23,8 @@
 ## Testing Guidelines
 - No pytest suite yet. Validate via:
   - Static checks: `uv.exe run mypy . --strict`, `uv.exe run pyright`.
-  - Numeric checks: `uv.exe run forward random --count 5` and compare reconstruction errors.
-  - Simulation: `uv.exe run verify_fk` and review tolerances/summary; capture output in `report/`.
+  - Numeric checks: `uv.exe run myarm -- fk random --count 5` and compare reconstruction errors.
+  - Simulation: `uv.exe run myarm -- verify fk` and review tolerances/summary; capture output in `report/`.
 - When adding tests, place them under `tests/` as `test_*.py`.
 
 ## Commit Guidelines
