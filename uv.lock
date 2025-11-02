@@ -2,19 +2,6 @@ version = 1
 revision = 2
 requires-python = ">=3.13"
 
-[manifest]
-members = [
-    "forward",
-    "symfun",
-]
-
-[manifest.dependency-groups]
-dev = [
-    { name = "microsoft-python-type-stubs", git = "https://github.com/microsoft/python-type-stubs.git" },
-    { name = "mypy", specifier = ">=1.18.2" },
-    { name = "pyright", specifier = ">=1.1.407" },
-]
-
 [[package]]
 name = "cbor"
 version = "1.0.0"
@@ -82,11 +69,18 @@ wheels = [
 [[package]]
 name = "forward"
 version = "0.1.0"
-source = { editable = "packages/forward" }
+source = { editable = "." }
 dependencies = [
     { name = "coppeliasim-zmqremoteapi-client" },
     { name = "numpy" },
     { name = "symbolica" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "microsoft-python-type-stubs" },
+    { name = "mypy" },
+    { name = "pyright" },
 ]
 
 [package.metadata]
@@ -96,19 +90,17 @@ requires-dist = [
     { name = "symbolica" },
 ]
 
+[package.metadata.requires-dev]
+dev = [
+    { name = "microsoft-python-type-stubs", git = "https://github.com/microsoft/python-type-stubs.git" },
+    { name = "mypy", specifier = ">=1.18.2" },
+    { name = "pyright", specifier = ">=1.1.407" },
+]
+
 [[package]]
 name = "microsoft-python-type-stubs"
 version = "0"
 source = { git = "https://github.com/microsoft/python-type-stubs.git#692c37c3969d22612b295ddf7e7af5907204a386" }
-
-[[package]]
-name = "mpmath"
-version = "1.3.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e0/47/dd32fa426cc72114383ac549964eecb20ecfd886d1e5ccf5340b55b02f57/mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f", size = 508106, upload-time = "2023-03-07T16:47:11.061Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c", size = 536198, upload-time = "2023-03-07T16:47:09.197Z" },
-]
 
 [[package]]
 name = "mypy"
@@ -290,33 +282,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/45/cfae4a98a1fe9663e5a0e7f232f547308cff3ea732933b2fcb0b7a38ab65/symbolica-0.18.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:4fb8bd329642b7ec51a0b9a226954b0312425323b3542f2e63c171e48df05b52", size = 20398835, upload-time = "2025-09-04T08:36:03.815Z" },
     { url = "https://files.pythonhosted.org/packages/9c/82/d3cf3df128c9188e1b064f87fd88b55b1d8019d959ea1e74cc4558db63f6/symbolica-0.18.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:959dbf51c201db529fe526335df08f4876489f9d63b69c34381364711a5936f6", size = 18412032, upload-time = "2025-09-04T08:36:14.162Z" },
     { url = "https://files.pythonhosted.org/packages/da/07/6a5e5ea0656efcddb7198cd23fce0780709aef480bbd0757bd2e8194cef0/symbolica-0.18.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f462839b0a5837a8ecbe7dba981e9bb5d57562ef614d94c4597445f707fcd161", size = 20874383, upload-time = "2025-09-04T08:35:52.222Z" },
-]
-
-[[package]]
-name = "symfun"
-version = "0.1.0"
-source = { editable = "packages/symfun" }
-dependencies = [
-    { name = "sympy" },
-    { name = "typing-extensions" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "sympy" },
-    { name = "typing-extensions", specifier = ">=4.12.2" },
-]
-
-[[package]]
-name = "sympy"
-version = "1.14.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "mpmath" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
 ]
 
 [[package]]

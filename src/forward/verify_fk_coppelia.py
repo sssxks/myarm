@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import math
 import time
-from typing import Any, List, Sequence, Tuple, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 import sympy as sp
@@ -11,7 +12,7 @@ from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 from forward.dh_params import demo_standard_6R
 
 
-def build_T06_symbolic() -> Tuple[sp.Matrix, list[sp.Symbol]]:
+def build_T06_symbolic() -> tuple[sp.Matrix, list[sp.Symbol]]:
     T06, th_syms, _ = demo_standard_6R()
     return T06, th_syms
 
@@ -67,7 +68,7 @@ def get_matrix4(sim: Any, obj: int, rel: int | None = None) -> np.ndarray:
 
 
 def set_joint_positions(
-    sim: Any, joints: List[int], q: Sequence[float], mode: str = "position"
+    sim: Any, joints: list[int], q: Sequence[float], mode: str = "position"
 ) -> None:
     if mode not in ("position", "target"):
         raise ValueError("mode must be position|target")

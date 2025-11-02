@@ -18,24 +18,16 @@ It’s structured so that we can later swap in a closed‑form branch when desir
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 from collections.abc import Iterable, Sequence
+from typing import NamedTuple
 
 import numpy as np
 
+from .dh_params import demo_standard_6R_num
 
-# ---- Robot constants (must match demo_standard_6R in solver.py) ----
-# Units: millimeters for a/d, radians for angles
-_A = np.array([0.0, 185.0, 170.0, 0.0, 0.0, 0.0], dtype=float)
-_ALPHA = np.array(
-    [-math.pi / 2, 0.0, 0.0, math.pi / 2, math.pi / 2, 0.0], dtype=float
-)
-_D = np.array([230.0, -54.0, 0.0, 77.0, 77.0, 85.5], dtype=float)
-
-# theta list used by FK is [q1, q2-π/2, q3, q4+π/2, q5+π/2, q6]
-_THETA_OFFSETS = np.array([0.0, -math.pi / 2, 0.0, math.pi / 2, math.pi / 2, 0.0])
-
+# currently, keep it as static var to simplify code
+dh_num = demo_standard_6R_num()
 
 # ---- Small numeric helpers ----
 def _rotz(theta: float) -> np.ndarray:
@@ -74,11 +66,6 @@ def _wrap_to_pi(v: float) -> float:
     return x - math.pi
 
 
-def _angle_diff(a: float, b: float) -> float:
-    """Minimal signed difference a-b wrapped to [-pi, pi]."""
-    return _wrap_to_pi(a - b)
-
-
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
 def dh_T(a: float, alpha: float, d: float, theta: float) -> np.ndarray:
     """Standard DH: Rz(theta) Tz(d) Tx(a) Rx(alpha)."""
@@ -92,20 +79,20 @@ def fk_numeric(q: Sequence[float] | np.ndarray) -> np.ndarray:
     """
     if len(q) != 6:
         raise ValueError("q must have length 6")
-    th = np.asarray(q, dtype=float) + _THETA_OFFSETS
+    th = np.asarray(q, dtype=float) + dh_num.theta_offset
     T = np.eye(4)
     for i in range(6):
-        T = T @ dh_T(float(_A[i]), float(_ALPHA[i]), float(_D[i]), float(th[i]))
+        T = T @ dh_T(float(dh_num.a[i]), float(dh_num.alpha[i]), float(dh_num.d[i]), float(th[i]))
     return T
 
 
 def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[np.ndarray]:
     """Return [T00, T01, …, T06] for current q."""
-    th = np.asarray(q, dtype=float) + _THETA_OFFSETS
+    th = np.asarray(q, dtype=float) + dh_num.theta_offset
     Ts: list[np.ndarray] = [np.eye(4)]
     T = np.eye(4)
     for i in range(6):
-        T = T @ dh_T(float(_A[i]), float(_ALPHA[i]), float(_D[i]), float(th[i]))
+        T = T @ dh_T(float(dh_num.a[i]), float(dh_num.alpha[i]), float(dh_num.d[i]), float(th[i]))
         Ts.append(T)
     return Ts
 
@@ -147,8 +134,7 @@ def rotation_angle(RA: np.ndarray, RB: np.ndarray) -> float:
     return float(math.acos(tr))
 
 
-@dataclass
-class IKOptions:
+class IKOptions(NamedTuple):
     max_iter: int = 200
     lambda_dls: float = 1e-3  # damping factor for DLS
     w_pos: float = 1.0        # weight (mm)
