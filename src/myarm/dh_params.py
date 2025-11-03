@@ -8,7 +8,7 @@ from typing import NamedTuple
 import numpy as np
 import sympy as sp
 
-from .solver import fk_standard
+from .fk_solver import fk_standard
 from .type_utils import HALF_PI, Num
 
 

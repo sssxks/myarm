@@ -66,7 +66,7 @@ def load_q_from_csv(path: str, deg: bool) -> list[list[float]]:
     return data
 
 
-def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+def configure_verify_fk_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Attach CLI options shared with the CLI entry point."""
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=23000)
@@ -90,13 +90,6 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument("--csv", default=None)
     return parser
 
-
-def build_parser() -> argparse.ArgumentParser:
-    """Return a standalone parser for the module."""
-    parser = argparse.ArgumentParser(description="Verify FK against CoppeliaSim via ZMQ")
-    return configure_parser(parser)
-
-
 def _collect_joint_sets(args: argparse.Namespace) -> list[list[float]]:
     if args.csv:
         return load_q_from_csv(args.csv, args.deg)
@@ -111,55 +104,42 @@ def _collect_joint_sets(args: argparse.Namespace) -> list[list[float]]:
 def run_verify_fk(args: argparse.Namespace) -> int:
     joint_sets = _collect_joint_sets(args)
     T06_sym, theta_syms = build_T06_symbolic()
-    client, sim = connect_coppelia(args.host, args.port)
+    # for some reason, we can not call .close() on client. so just ignore that
+    _, sim = connect_coppelia(args.host, args.port)
 
-    try:
-        joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
-        if len(joint_names) != 6:
-            raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
-        joints = [get_object_handle(sim, name) for name in joint_names]
-        tip = get_object_handle(sim, args.tip)
-        base = get_object_handle(sim, args.base) if args.base else None
+    joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
+    if len(joint_names) != 6:
+        raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
+    joints = [get_object_handle(sim, name) for name in joint_names]
+    tip = get_object_handle(sim, args.tip)
+    base = get_object_handle(sim, args.base) if args.base else None
 
-        print("Verifying (pos m, rot deg)…")
-        num_pass = 0
-        for index, q in enumerate(joint_sets, start=1):
-            set_joint_positions(sim, joints, q, mode=args.mode)
-            time.sleep(max(args.sleep, 0.0))
+    print("Verifying (pos m, rot deg)…")
+    num_pass = 0
+    for index, q in enumerate(joint_sets, start=1):
+        set_joint_positions(sim, joints, q, mode=args.mode)
+        time.sleep(max(args.sleep, 0.0))
 
-            matrix_sim = get_matrix4(sim, tip, base)
-            T_fk = eval_T_numeric(T06_sym, theta_syms, q)
-            matrix_fk = spT_to_np(T_fk, unit_scale=args.unit_scale)
+        matrix_sim = get_matrix4(sim, tip, base)
+        T_fk = eval_T_numeric(T06_sym, theta_syms, q)
+        matrix_fk = spT_to_np(T_fk, unit_scale=args.unit_scale)
 
-            pos_err = translation_error(matrix_fk, matrix_sim)
-            rot_err = rotation_angle_deg(matrix_fk[:3, :3], matrix_sim[:3, :3])
-            passed = (pos_err <= args.tol_pos) and (rot_err <= args.tol_rot)
+        pos_err = translation_error(matrix_fk, matrix_sim)
+        rot_err = rotation_angle_deg(matrix_fk[:3, :3], matrix_sim[:3, :3])
+        passed = (pos_err <= args.tol_pos) and (rot_err <= args.tol_rot)
 
-            print(f"\nCase {index}: {'PASS' if passed else 'FAIL'}")
-            print("  q (rad):", [round(value, 4) for value in q])
-            print(f"  pos_err: {pos_err * 1000:.3f} mm ({pos_err:.6f} m)")
-            print(f"  rot_err: {rot_err:.3f} deg")
-            if passed:
-                num_pass += 1
-            np.set_printoptions(precision=4, suppress=True)
-            print("  M_fk:\n", matrix_fk)
-            print("  M_sim:\n", matrix_sim)
+        print(f"\nCase {index}: {'PASS' if passed else 'FAIL'}")
+        print("  q (rad):", [round(value, 4) for value in q])
+        print(f"  pos_err: {pos_err * 1000:.3f} mm ({pos_err:.6f} m)")
+        print(f"  rot_err: {rot_err:.3f} deg")
+        if passed:
+            num_pass += 1
+        np.set_printoptions(precision=4, suppress=True)
+        print("  M_fk:\n", matrix_fk)
+        print("  M_sim:\n", matrix_sim)
 
-        print(
-            f"\nSummary: {num_pass}/{len(joint_sets)} passed "
-            f"(tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
-        )
-        return 0
-    finally:
-        if hasattr(client, "close"):
-            client.close()
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    return run_verify_fk(args)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    print(
+        f"\nSummary: {num_pass}/{len(joint_sets)} passed "
+        f"(tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
+    )
+    return 0

@@ -71,7 +71,7 @@ np.set_printoptions(precision=6, suppress=True)
 
 
 def main() -> None:
-    client, sim = connect_coppelia(HOST, PORT)
+    _, sim = connect_coppelia(HOST, PORT)
     joints = [get_object_handle(sim, path) for path in JOINT_PATHS]
     tip = get_object_handle(sim, TIP_PATH)
     base = get_object_handle(sim, BASE_PATH) if BASE_PATH else None
@@ -110,8 +110,6 @@ def main() -> None:
         print(f"  Rotation error (deg): {rot_err_deg:.6f}")
 
     print("\nVerification complete.")
-    if hasattr(client, "close"):
-        client.close()
 
 
 if __name__ == "__main__":

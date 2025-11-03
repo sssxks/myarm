@@ -21,7 +21,7 @@ from myarm.coppelia_utils import (
 from myarm.ik_solver import IKOptions, fk_numeric, solve_ik
 
 
-def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+def configure_verify_ik_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Attach the shared IK verification CLI arguments."""
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=23000)
@@ -43,12 +43,6 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument("--sleep", type=float, default=0.05)
     parser.add_argument("--apply", action="store_true", help="apply best IK q to sim")
     return parser
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Return a standalone parser for verification CLI use."""
-    parser = argparse.ArgumentParser(description="Verify IK against CoppeliaSim via ZMQ")
-    return configure_parser(parser)
 
 
 def _prepare_target(
@@ -74,72 +68,59 @@ def _build_options(args: argparse.Namespace) -> IKOptions:
 
 
 def run_verify_ik(args: argparse.Namespace) -> int:
-    client, sim = connect_coppelia(args.host, args.port)
+    # for some reason, we can not call .close() on client. so just ignore that
+    _, sim = connect_coppelia(args.host, args.port)
 
-    try:
-        joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
-        if len(joint_names) != 6:
-            raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
-        joint_handles = [get_object_handle(sim, name) for name in joint_names]
-        tip_handle = get_object_handle(sim, args.tip)
-        base_handle = get_object_handle(sim, args.base) if args.base else None
+    joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
+    if len(joint_names) != 6:
+        raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
+    joint_handles = [get_object_handle(sim, name) for name in joint_names]
+    tip_handle = get_object_handle(sim, args.tip)
+    base_handle = get_object_handle(sim, args.base) if args.base else None
 
-        target_meters, target_mm = _prepare_target(
-            sim, tip_handle, base_handle, float(args.unit_scale)
-        )
-        q_sim = get_joint_positions(sim, joint_handles)
-        options = _build_options(args)
+    target_meters, target_mm = _prepare_target(
+        sim, tip_handle, base_handle, float(args.unit_scale)
+    )
+    q_sim = get_joint_positions(sim, joint_handles)
+    options = _build_options(args)
 
-        results = solve_ik(target_mm, seeds=[q_sim], opts=options)
-        if not results:
-            print("No solution found.")
-            return 1
+    results = solve_ik(target_mm, seeds=[q_sim], opts=options)
+    if not results:
+        print("No solution found.")
+        return 1
 
-        np.set_printoptions(precision=4, suppress=True)
-        print("Target transform (meters from sim; mm internally for IK):")
-        print(target_meters)
+    np.set_printoptions(precision=4, suppress=True)
+    print("Target transform (meters from sim; mm internally for IK):")
+    print(target_meters)
 
-        best: tuple[np.ndarray, float, float] | None = None
-        for index, (q, pos_err_mm, rot_err_rad, iterations) in enumerate(results, start=1):
-            T_fk = fk_numeric(q)
-            pos_err = float(np.linalg.norm(T_fk[:3, 3] - target_mm[:3, 3]))
-            rot_err = rotation_angle_deg(T_fk[:3, :3], target_mm[:3, :3])
-            print(
-                f"\nSol {index}: iters={iterations}, pos_err={pos_err:.3e} mm, "
-                f"rot_err={rot_err:.3f} deg"
-            )
-            print("  q(rad):", [round(float(value), 6) for value in q])
-            print("  q(deg):", [round(math.degrees(float(value)), 3) for value in q])
-            if best is None or (pos_err, rot_err) < (best[1], best[2]):
-                best = (q, pos_err, rot_err)
-
-        assert best is not None  # results is non-empty by this point
-        passed = best[1] <= args.tol_pos_mm and best[2] <= args.tol_rot_deg
+    best: tuple[np.ndarray, float, float] | None = None
+    for index, (q, pos_err_mm, rot_err_rad, iterations) in enumerate(results, start=1):
+        T_fk = fk_numeric(q)
+        pos_err = float(np.linalg.norm(T_fk[:3, 3] - target_mm[:3, 3]))
+        rot_err = rotation_angle_deg(T_fk[:3, :3], target_mm[:3, :3])
         print(
-            f"\nBest: pos_err={best[1]:.3e} mm, rot_err={best[2]:.3f} deg → "
-            f"{'PASS' if passed else 'FAIL'}"
+            f"\nSol {index}: iters={iterations}, pos_err={pos_err:.3e} mm, "
+            f"rot_err={rot_err:.3f} deg"
         )
+        print("  q(rad):", [round(float(value), 6) for value in q])
+        print("  q(deg):", [round(math.degrees(float(value)), 3) for value in q])
+        if best is None or (pos_err, rot_err) < (best[1], best[2]):
+            best = (q, pos_err, rot_err)
 
-        if args.apply:
-            set_joint_positions(
-                sim, joint_handles, cast(Sequence[float], best[0]), mode="position"
-            )
-            time.sleep(max(0.0, float(args.sleep)))
-            updated = get_matrix4(sim, tip_handle, base_handle)
-            print("\nApplied best solution. Sim tip now:")
-            print(updated)
+    assert best is not None  # results is non-empty by this point
+    passed = best[1] <= args.tol_pos_mm and best[2] <= args.tol_rot_deg
+    print(
+        f"\nBest: pos_err={best[1]:.3e} mm, rot_err={best[2]:.3f} deg → "
+        f"{'PASS' if passed else 'FAIL'}"
+    )
 
-        return 0
-    finally:
-        if hasattr(client, "close"):
-            client.close()
+    if args.apply:
+        set_joint_positions(
+            sim, joint_handles, cast(Sequence[float], best[0]), mode="position"
+        )
+        time.sleep(max(0.0, float(args.sleep)))
+        updated = get_matrix4(sim, tip_handle, base_handle)
+        print("\nApplied best solution. Sim tip now:")
+        print(updated)
 
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    parsed = parser.parse_args(argv)
-    return run_verify_ik(parsed)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return 0

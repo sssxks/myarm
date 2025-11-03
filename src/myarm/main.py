@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import math
 import random
+from math import degrees, radians
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
@@ -37,11 +38,9 @@ from myarm.ik_solver import (
 )
 from myarm.numerical_checker import check_numeric_once
 from myarm.presets import PRESETS_DEG
-from myarm.solver import T_to_euler_xy_dash_z
-from myarm.verify_fk_coppelia import configure_parser as configure_verify_fk_parser
-from myarm.verify_fk_coppelia import run_verify_fk
-from myarm.verify_ik_coppelia import configure_parser as configure_verify_ik_parser
-from myarm.verify_ik_coppelia import run_verify_ik
+from myarm.fk_solver import T_to_euler_xy_dash_z
+from myarm.verify_fk_coppelia import configure_verify_fk_parser, run_verify_fk
+from myarm.verify_ik_coppelia import configure_verify_ik_parser, run_verify_ik
 
 if TYPE_CHECKING:
     import numpy as np
@@ -51,17 +50,9 @@ def _pprint_matrix(matrix: sp.Matrix) -> None:
     sp.pprint(matrix, use_unicode=True)  # type: ignore[operator]
 
 
-def _deg(value: float) -> float:
-    return math.degrees(value)
-
-
-def _rad(value: float) -> float:
-    return math.radians(value)
-
-
 def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
-        return [[_rad(entry) for entry in row] for row in q_list]
+        return [[radians(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
 
 
@@ -71,6 +62,7 @@ def cmd_fk_symbolic(args: argparse.Namespace) -> int:
     alpha = params["alpha"]
     d = params["d"]
     theta = params["theta"]
+    from myarm.fk_solver import fk_standard
     if args.steps:
         print("Stepwise Ti (evaluated at rest unless --no-eval):")
         rest = {s: 0.0 for s in th_syms}
@@ -119,7 +111,7 @@ def cmd_fk_eval(args: argparse.Namespace) -> int:
         _pprint_matrix(T_num)
         a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
         print("XY'Z' (rad):", float(a), float(b), float(g))
-        print("XY'Z' (deg):", _deg(float(a)), _deg(float(b)), _deg(float(g)))
+        print("XY'Z' (deg):", degrees(float(a)), degrees(float(b)), degrees(float(g)))
     return 0
 
 
@@ -169,7 +161,7 @@ def _collect_seeds(args: argparse.Namespace, deg: bool) -> list[list[float]]:
         for row in rows:
             if len(row) != 6:
                 raise SystemExit("--seed expects 6 values per entry")
-            converted = [_rad(v) for v in row] if deg else [float(v) for v in row]
+            converted = [radians(v) for v in row] if deg else [float(v) for v in row]
             seeds.append(converted)
     return seeds
 
@@ -180,8 +172,8 @@ def _print_ik_solutions(T_des: "np.ndarray", results: list[tuple["np.ndarray", f
     print("\nSolutions (up to 8 unique):")
     for i, (q, pe, re, it) in enumerate(results[:limit], 1):
         qlist = [float(x) for x in q]
-        qdeg = [round(_deg(v), 3) for v in qlist]
-        print(f"\nSol {i}: iters={it}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
+        qdeg = [round(degrees(v), 3) for v in qlist]
+        print(f"\nSol {i}: iters={it}, pos_err={pe:.3e} mm, rot_err={degrees(re):.4f} deg")
         print("  q (rad):", [round(v, 6) for v in qlist])
         print("  q (deg):", qdeg)
 
@@ -199,7 +191,7 @@ def _add_ik_common_arguments(parser: argparse.ArgumentParser, deg_help: str) -> 
     parser.add_argument("--lmbda", type=float, default=1e-3, help="damping λ")
     parser.add_argument("--w-pos", type=float, default=1.0, help="weight for position (mm)")
     parser.add_argument("--w-rot", type=float, default=200.0, help="weight for rotation (rad)")
-    parser.add_argument("--tol-pos", type=float, default=1e-3, help="pos tol (mm)")
+    parser.add_argument("--tol-pos", type=float, default=1e-4, help="pos tol (mm)")
     parser.add_argument("--tol-rot-deg", type=float, default=0.1, help="rot tol (deg)")
     parser.add_argument("--step-clip", type=float, default=0.5, help="max |Δq| per iter (rad)")
     parser.add_argument("--limit", type=int, default=8, help="print up to N solutions")
@@ -215,8 +207,6 @@ def _matrix16_to_np(vals: Sequence[float]) -> "np.ndarray":
 
 
 def _build_target_from_q(q: Sequence[float], deg: bool) -> "np.ndarray":
-    import numpy as np
-
     if len(q) != 6:
         raise SystemExit("--from-q requires 6 values")
     qrad = [math.radians(v) for v in q] if deg else list(q)
@@ -264,7 +254,7 @@ def cmd_ik_euler(args: argparse.Namespace) -> int:
 
     x_mm, y_mm, z_mm = (scale * v for v in (x, y, z))
     if args.deg:
-        alpha_r, beta_r, gamma_r = (_rad(alpha), _rad(beta), _rad(gamma))
+        alpha_r, beta_r, gamma_r = (radians(alpha), radians(beta), radians(gamma))
     else:
         alpha_r, beta_r, gamma_r = (alpha, beta, gamma)
 
@@ -279,7 +269,7 @@ def cmd_ik_euler(args: argparse.Namespace) -> int:
 
     xyz_mm = [round(v, 3) for v in (x_mm, y_mm, z_mm)]
     euler_rad = [round(v, 6) for v in (alpha_r, beta_r, gamma_r)]
-    euler_deg = [round(_deg(v), 3) for v in (alpha_r, beta_r, gamma_r)]
+    euler_deg = [round(degrees(v), 3) for v in (alpha_r, beta_r, gamma_r)]
     print(f"Target XYZ (mm): {xyz_mm}")
     print("Euler (rad):", euler_rad)
     print("Euler (deg):", euler_deg)
@@ -342,8 +332,8 @@ def build_parser() -> argparse.ArgumentParser:
     ik_euler.add_argument(
         "--pos-unit",
         choices=("m", "mm"),
-        default="m",
-        help="units for x y z (default: meters)",
+        default="mm",
+        help="units for x y z (default: millimeters)",
     )
     _add_ik_common_arguments(ik_euler, "interpret Euler angles and --seed in degrees")
     ik_euler.set_defaults(func=cmd_ik_euler)
@@ -360,17 +350,6 @@ def build_parser() -> argparse.ArgumentParser:
     verify_ik.set_defaults(func=cmd_verify_ik)
 
     return parser
-
-
-def fk_standard(
-    a: Sequence[int | float | sp.Expr],
-    alpha: Sequence[int | float | sp.Expr],
-    d: Sequence[int | float | sp.Expr],
-    theta: Sequence[int | float | sp.Expr],
-) -> sp.Matrix:  # keep backward import compatibility if used elsewhere
-    from myarm.solver import fk_standard as _fk
-
-    return _fk(a, alpha, d, theta)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

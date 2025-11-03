@@ -9,17 +9,15 @@ from numpy.typing import NDArray
 
 from .type_utils import Num
 
-Matrix33 = NDArray[np.float64]
+type Matrix33 = NDArray[np.float64]
 
 
 def rotation_xy_dash_z_numeric(alpha: float, beta: float, gamma: float) -> Matrix33:
     """Return intrinsic XY'Z' rotation matrix with NumPy backend."""
-    a = float(alpha)
-    b = float(beta)
-    g = float(gamma)
-    ca, sa = math.cos(a), math.sin(a)
-    cb, sb = math.cos(b), math.sin(b)
-    cg, sg = math.cos(g), math.sin(g)
+    cos, sin = math.cos, math.sin
+    ca, sa = cos(alpha), sin(alpha)
+    cb, sb = cos(beta), sin(beta)
+    cg, sg = cos(gamma), sin(gamma)
     return np.array(
         [
             [cb * cg, -cb * sg, sb],
@@ -32,18 +30,15 @@ def rotation_xy_dash_z_numeric(alpha: float, beta: float, gamma: float) -> Matri
 
 def rotation_xy_dash_z_symbolic(alpha: Num, beta: Num, gamma: Num) -> sp.Matrix:
     """Return intrinsic XY'Z' rotation matrix with SymPy backend."""
-    ca = cast(sp.Expr, sp.cos(alpha))
-    sa = cast(sp.Expr, sp.sin(alpha))
-    cb = cast(sp.Expr, sp.cos(beta))
-    sb = cast(sp.Expr, sp.sin(beta))
-    cg = cast(sp.Expr, sp.cos(gamma))
-    sg = cast(sp.Expr, sp.sin(gamma))
-    # Use SymPy's multiplication
+    cos, sin = sp.cos, sp.sin
+    ca, sa = cos(alpha), sin(alpha)
+    cb, sb = cos(beta), sin(beta)
+    cg, sg = cos(gamma), sin(gamma)
+
     return sp.Matrix(
         [
-            [cb.mul(cg), -cb.mul(sg), sb],
-            [sa.mul(sb).mul(cg) + ca.mul(sg), ca.mul(cg) - sa.mul(sb).mul(sg), -sa.mul(cb)],
-            [-ca.mul(sb).mul(cg) + sa.mul(sg), sa.mul(cg) + ca.mul(sb).mul(sg), ca.mul(cb)],
-        ]
+            [cb * cg, -cb * sg, sb],  # type:ignore
+            [sa * sb * cg + ca * sg, ca * cg - sa * sb * sg, -sa * cb],  # type:ignore
+            [-ca * sb * cg + sa * sg, sa * cg + ca * sb * sg, ca * cb],  # type:ignore
+        ],
     )
-

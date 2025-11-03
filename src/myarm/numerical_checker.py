@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 
 from myarm.orientation import rotation_xy_dash_z_symbolic
-from myarm.solver import T_to_euler_xy_dash_z
+from myarm.fk_solver import T_to_euler_xy_dash_z
 
 
 def R3(M: sp.Matrix) -> sp.Matrix:
