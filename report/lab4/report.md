@@ -107,9 +107,8 @@ $$
 1. 环境：`uv.exe sync`
 2. 求解单个末端位姿（位置默认米，角度弧度；如输入为毫米 / 度加 `--pos-unit mm --deg`）：
    ```ps1
-   uv.exe run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
+   uv.exe run myarm ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
    ```
-   可追加 `--nsolve` 调用 `solve_ik_nsolve` 以符号式精修。
 3. 批量验证（需启用 CoppeliaSim ZMQ 服务）：
    ```ps1
    uv.exe run python scripts/verify_cases.py

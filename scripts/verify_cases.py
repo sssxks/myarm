@@ -6,8 +6,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from myarm.ik_solver import pose_from_xyz_euler, rotation_angle
-from myarm.verify_ik_coppelia import connect_coppelia, get_handle, get_matrix4, set_joint_positions
+from myarm.coppelia_utils import (
+    DEFAULT_JOINT_NAMES,
+    DEFAULT_TIP_NAME,
+    connect_coppelia,
+    get_matrix4,
+    get_object_handle,
+    rotation_angle_rad,
+    set_joint_positions,
+)
+from myarm.ik_solver import pose_from_xyz_euler
 
 
 @dataclass(frozen=True)
@@ -54,8 +62,8 @@ SCENARIOS: tuple[Scenario, ...] = (
 # CoppeliaSim defaults for this project
 HOST = "127.0.0.1"
 PORT = 23000
-JOINT_PATHS = tuple(f"/Robot/Joint{i}" for i in range(1, 7))
-TIP_PATH = "/Robot/SuctionCup/SuctionCup_connect"
+JOINT_PATHS = tuple(DEFAULT_JOINT_NAMES)
+TIP_PATH = DEFAULT_TIP_NAME
 BASE_PATH = None
 UNIT_SCALE = 0.001  # mm <-> m
 
@@ -64,9 +72,9 @@ np.set_printoptions(precision=6, suppress=True)
 
 def main() -> None:
     client, sim = connect_coppelia(HOST, PORT)
-    joints = [get_handle(sim, path) for path in JOINT_PATHS]
-    tip = get_handle(sim, TIP_PATH)
-    base = get_handle(sim, BASE_PATH) if BASE_PATH else None
+    joints = [get_object_handle(sim, path) for path in JOINT_PATHS]
+    tip = get_object_handle(sim, TIP_PATH)
+    base = get_object_handle(sim, BASE_PATH) if BASE_PATH else None
 
     print("Connected to CoppeliaSim via ZMQ.")
     for scenario in SCENARIOS:
@@ -77,13 +85,20 @@ def main() -> None:
         M_mm = M_sim.copy()
         M_mm[:3, 3] = M_mm[:3, 3] / UNIT_SCALE
 
+        x_mm, y_mm, z_mm = (axis * 1000.0 for axis in scenario.xyz_m)
         target_mm = pose_from_xyz_euler(
-            *(axis * 1000.0 for axis in scenario.xyz_m),
-            *scenario.euler,
+            x_mm,
+            y_mm,
+            z_mm,
+            scenario.euler[0],
+            scenario.euler[1],
+            scenario.euler[2],
         )
 
         pos_err = float(np.linalg.norm(M_mm[:3, 3] - target_mm[:3, 3]))
-        rot_err_deg = math.degrees(rotation_angle(M_mm[:3, :3], target_mm[:3, :3]))
+        rot_err_deg = math.degrees(
+            rotation_angle_rad(M_mm[:3, :3], target_mm[:3, :3])
+        )
 
         xyz_target = [round(float(target_mm[i, 3]), 3) for i in range(3)]
         xyz_sim = [round(float(M_mm[i, 3]), 3) for i in range(3)]

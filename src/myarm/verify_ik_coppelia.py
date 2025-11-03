@@ -8,56 +8,30 @@ from typing import Any, cast
 
 import numpy as np
 
-from coppeliasim_zmqremoteapi_client import RemoteAPIClient
+from myarm.coppelia_utils import (
+    DEFAULT_JOINT_NAMES,
+    DEFAULT_TIP_NAME,
+    connect_coppelia,
+    get_joint_positions,
+    get_matrix4,
+    get_object_handle,
+    rotation_angle_deg,
+    set_joint_positions,
+)
 from myarm.ik_solver import IKOptions, fk_numeric, solve_ik
 
 
-def connect_coppelia(host: str, port: int) -> tuple[RemoteAPIClient, Any]:
-    if RemoteAPIClient is None:
-        raise RuntimeError("Install coppeliasim-zmqremoteapi-client")
-    client = RemoteAPIClient(host=host, port=port)
-    sim_get = getattr(client, "getObject", None)
-    sim = client.getObject("sim") if callable(sim_get) else client.require("sim")
-    return client, sim
-
-
-def get_handle(sim: Any, name: str) -> int:
-    return int(sim.getObject(name))
-
-
-def get_matrix4(sim: Any, obj: int, rel: int | None = None) -> np.ndarray:
-    relh = rel if rel is not None else -1
-    m = sim.getObjectMatrix(obj, relh)
-    M = np.eye(4, dtype=float)
-    M[:3, :4] = np.array(m, dtype=float).reshape(3, 4)
-    return M
-
-
-def get_joint_positions(sim: Any, joints: Sequence[int]) -> list[float]:
-    return [float(sim.getJointPosition(h)) for h in joints]
-
-
-def set_joint_positions(sim: Any, joints: Sequence[int], q: Sequence[float]) -> None:
-    for h, v in zip(joints, q):
-        sim.setJointPosition(h, float(v))
-
-
-def rotation_angle_deg(RA: np.ndarray, RB: np.ndarray) -> float:
-    R = RA.T @ RB
-    tr = float(np.clip((np.trace(R) - 1.0) * 0.5, -1.0, 1.0))
-    return math.degrees(math.acos(tr))
-
-
 def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Attach the shared IK verification CLI arguments."""
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=23000)
     parser.add_argument(
         "--joint",
         dest="joints",
         action="append",
-        default=[f"/Robot/Joint{i}" for i in range(1, 7)],
+        default=list(DEFAULT_JOINT_NAMES),
     )
-    parser.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
+    parser.add_argument("--tip", default=DEFAULT_TIP_NAME)
     parser.add_argument("--base", default=None)
     parser.add_argument("--unit-scale", type=float, default=0.001, help="FK(mm)↔Sim(m)")
     parser.add_argument("--tol-pos-mm", type=float, default=1e-2)
@@ -70,91 +44,94 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Verify IK against CoppeliaSim via ZMQ")
-    configure_parser(p)
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=23000)
-    p.add_argument(
-        "--joint",
-        dest="joints",
-        action="append",
-        default=[f"/Robot/Joint{i}" for i in range(1, 7)],
-    )
-    p.add_argument("--tip", default="/Robot/SuctionCup/SuctionCup_connect")
-    p.add_argument("--base", default=None)
-    p.add_argument("--unit-scale", type=float, default=0.001, help="FK(mm)↔Sim(m)")
-    p.add_argument("--tol-pos-mm", type=float, default=1e-2)
-    p.add_argument("--tol-rot-deg", type=float, default=0.2)
-    p.add_argument("--max-iter", type=int, default=200)
-    p.add_argument("--lmbda", type=float, default=1e-3)
-    p.add_argument("--sleep", type=float, default=0.05)
-    return p
+    """Return a standalone parser for verification CLI use."""
+    parser = argparse.ArgumentParser(description="Verify IK against CoppeliaSim via ZMQ")
+    return configure_parser(parser)
 
 
-def run_verify_ik(args: argparse.Namespace) -> int:
-    _, sim = connect_coppelia(args.host, args.port)
-    if len(args.joints) != 6:
-        raise SystemExit(f"Expected 6 joints, got {len(args.joints)}")
-    joints = [get_handle(sim, n) for n in args.joints]
-    tip = get_handle(sim, args.tip)
-    base = get_handle(sim, args.base) if args.base else None
+def _prepare_target(
+    sim: Any,
+    tip_handle: int,
+    base_handle: int | None,
+    unit_scale: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (matrix_meters, matrix_mm) for the current simulation pose."""
+    matrix_meters = get_matrix4(sim, tip_handle, base_handle)
+    matrix_mm = matrix_meters.copy()
+    matrix_mm[:3, 3] = matrix_mm[:3, 3] / float(unit_scale)
+    return matrix_meters, matrix_mm
 
-    # Read current sim pose and (optionally) current q as a good seed
-    M_sim_m = get_matrix4(sim, tip, base)
-    M_des = M_sim_m.copy()
-    M_des[:3, 3] = M_des[:3, 3] / float(args.unit_scale)  # meters→millimeters
-    q_sim = get_joint_positions(sim, joints)
 
-    opts = IKOptions(
+def _build_options(args: argparse.Namespace) -> IKOptions:
+    return IKOptions(
         max_iter=int(args.max_iter),
         lambda_dls=float(args.lmbda),
         tol_pos=float(args.tol_pos_mm),
         tol_rot=math.radians(float(args.tol_rot_deg)),
     )
 
-    results = solve_ik(M_des, seeds=[q_sim], opts=opts)
+
+def run_verify_ik(args: argparse.Namespace) -> int:
+    _, sim = connect_coppelia(args.host, args.port)
+
+    if len(args.joints) != 6:
+        raise SystemExit(f"Expected 6 joints, got {len(args.joints)}")
+    joint_handles = [get_object_handle(sim, name) for name in args.joints]
+    tip_handle = get_object_handle(sim, args.tip)
+    base_handle = get_object_handle(sim, args.base) if args.base else None
+
+    target_meters, target_mm = _prepare_target(
+        sim, tip_handle, base_handle, float(args.unit_scale)
+    )
+    q_sim = get_joint_positions(sim, joint_handles)
+    options = _build_options(args)
+
+    results = solve_ik(target_mm, seeds=[q_sim], opts=options)
     if not results:
         print("No solution found.")
         return 1
 
-    # Re‑evaluate and pick best by errors; show a few
-    print("Target M (meters from sim; mm internally for IK):")
     np.set_printoptions(precision=4, suppress=True)
-    print(M_sim_m)
+    print("Target transform (meters from sim; mm internally for IK):")
+    print(target_meters)
 
-    best = None
-    for i, (q, pe, re, it) in enumerate(results, 1):
+    best: tuple[np.ndarray, float, float] | None = None
+    for index, (q, pos_err_mm, rot_err_rad, iterations) in enumerate(results, start=1):
         T_fk = fk_numeric(q)
-        pe2 = float(np.linalg.norm(T_fk[:3, 3] - M_des[:3, 3]))
-        re2 = rotation_angle_deg(T_fk[:3, :3], M_des[:3, :3])
+        pos_err = float(np.linalg.norm(T_fk[:3, 3] - target_mm[:3, 3]))
+        rot_err = rotation_angle_deg(T_fk[:3, :3], target_mm[:3, :3])
         print(
-            f"\nSol {i}: iters={it}, pos_err={pe2:.3e} mm, rot_err={re2:.3f} deg\n  q(rad)="
-            f"{[round(float(v), 6) for v in q]}\n  q(deg)="
-            f"{[round(math.degrees(float(v)), 3) for v in q]}"
+            f"\nSol {index}: iters={iterations}, pos_err={pos_err:.3e} mm, "
+            f"rot_err={rot_err:.3f} deg"
         )
-        if best is None or (pe2, re2) < (best[1], best[2]):
-            best = (q, pe2, re2)
+        print("  q(rad):", [round(float(value), 6) for value in q])
+        print("  q(deg):", [round(math.degrees(float(value)), 3) for value in q])
+        if best is None or (pos_err, rot_err) < (best[1], best[2]):
+            best = (q, pos_err, rot_err)
 
-    assert best is not None
-    ok = best[1] <= args.tol_pos_mm and best[2] <= args.tol_rot_deg
+    assert best is not None  # results is non-empty by this point
+    passed = best[1] <= args.tol_pos_mm and best[2] <= args.tol_rot_deg
     print(
-        f"\nBest: pos_err={best[1]:.3e} mm, rot_err={best[2]:.3f} deg → {'PASS' if ok else 'FAIL'}"
+        f"\nBest: pos_err={best[1]:.3e} mm, rot_err={best[2]:.3f} deg → "
+        f"{'PASS' if passed else 'FAIL'}"
     )
 
     if args.apply:
-        set_joint_positions(sim, joints, cast(Sequence[float], best[0]))
+        set_joint_positions(
+            sim, joint_handles, cast(Sequence[float], best[0]), mode="position"
+        )
         time.sleep(max(0.0, float(args.sleep)))
-        M_after = get_matrix4(sim, tip, base)
+        updated = get_matrix4(sim, tip_handle, base_handle)
         print("\nApplied best solution. Sim tip now:")
-        print(M_after)
+        print(updated)
 
     return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
-    return run_verify_ik(args)
+    parsed = parser.parse_args(argv)
+    return run_verify_ik(parsed)
 
 
 if __name__ == "__main__":

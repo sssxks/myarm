@@ -36,6 +36,7 @@ from myarm.ik_solver import (
     solve_ik,
 )
 from myarm.numerical_checker import check_numeric_once
+from myarm.presets import PRESETS_DEG
 from myarm.solver import T_to_euler_xy_dash_z
 from myarm.verify_fk_coppelia import configure_parser as configure_verify_fk_parser
 from myarm.verify_fk_coppelia import run_verify_fk
@@ -62,15 +63,6 @@ def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[_rad(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
-
-
-PRESETS_DEG = [
-    [30, 0, 90, 60, 0, 0],
-    [-30, 0, 60, 60, -30, 0],
-    [30, 0, 60, 60, 60, 0],
-    [-30, 0, 60, 60, 15, 0],
-    [15, 15, 15, 15, 15, 15],
-]
 
 
 def cmd_fk_symbolic(args: argparse.Namespace) -> int:

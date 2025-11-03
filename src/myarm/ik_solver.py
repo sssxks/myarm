@@ -20,45 +20,50 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
-from .dh_params import demo_standard_6R_num
+from .dh_params import DHParamsNum, demo_standard_6R_num
 
 # currently, keep it as static var to simplify code
-dh_num = demo_standard_6R_num()
+dh_num: DHParamsNum = demo_standard_6R_num()
+
+Matrix44 = NDArray[np.float64]
+Matrix33 = NDArray[np.float64]
+Vector3 = NDArray[np.float64]
 
 # ---- Small numeric helpers ----
-def _rotz(theta: float) -> np.ndarray:
+def _rotz(theta: float) -> Matrix44:
     c, s = math.cos(theta), math.sin(theta)
-    M = np.eye(4)
+    M = np.eye(4, dtype=float)
     M[0, 0], M[0, 1] = c, -s
     M[1, 0], M[1, 1] = s, c
-    return M
+    return cast(Matrix44, M)
 
 
-def _rotx(alpha: float) -> np.ndarray:
+def _rotx(alpha: float) -> Matrix44:
     c, s = math.cos(alpha), math.sin(alpha)
-    M = np.eye(4)
+    M = np.eye(4, dtype=float)
     M[1, 1], M[1, 2] = c, -s
     M[2, 1], M[2, 2] = s, c
-    return M
+    return cast(Matrix44, M)
 
 
-def _tz(d: float) -> np.ndarray:
-    M = np.eye(4)
+def _tz(d: float) -> Matrix44:
+    M = np.eye(4, dtype=float)
     M[2, 3] = d
-    return M
+    return cast(Matrix44, M)
 
 
-def _tx(a: float) -> np.ndarray:
-    M = np.eye(4)
+def _tx(a: float) -> Matrix44:
+    M = np.eye(4, dtype=float)
     M[0, 3] = a
-    return M
+    return cast(Matrix44, M)
 
 
-def rotation_xy_dash_z(alpha: float, beta: float, gamma: float) -> np.ndarray:
+def rotation_xy_dash_z(alpha: float, beta: float, gamma: float) -> Matrix33:
     """Return rotation matrix for intrinsic XY'Z' (≡ extrinsic Z-Y-X) angles."""
     ca, sa = math.cos(alpha), math.sin(alpha)
     cb, sb = math.cos(beta), math.sin(beta)
@@ -67,12 +72,12 @@ def rotation_xy_dash_z(alpha: float, beta: float, gamma: float) -> np.ndarray:
     Rx = np.array([[1.0, 0.0, 0.0], [0.0, ca, -sa], [0.0, sa, ca]], dtype=float)
     Ry = np.array([[cb, 0.0, sb], [0.0, 1.0, 0.0], [-sb, 0.0, cb]], dtype=float)
     Rz = np.array([[cg, -sg, 0.0], [sg, cg, 0.0], [0.0, 0.0, 1.0]], dtype=float)
-    return Rx @ Ry @ Rz
+    return cast(Matrix33, Rx @ Ry @ Rz)
 
 
 def pose_from_xyz_euler(
     x_mm: float, y_mm: float, z_mm: float, alpha: float, beta: float, gamma: float
-) -> np.ndarray:
+) -> Matrix44:
     """Build a homogeneous transform from XYZ translation (mm) and XY'Z' angles (rad)."""
     T = np.eye(4, dtype=float)
     T[:3, 3] = np.array([x_mm, y_mm, z_mm], dtype=float)
@@ -88,12 +93,12 @@ def _wrap_to_pi(v: float) -> float:
 
 
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
-def dh_T(a: float, alpha: float, d: float, theta: float) -> np.ndarray:
+def dh_T(a: float, alpha: float, d: float, theta: float) -> Matrix44:
     """Standard DH: Rz(theta) Tz(d) Tx(a) Rx(alpha)."""
     return _rotz(theta) @ _tz(d) @ _tx(a) @ _rotx(alpha)
 
 
-def fk_numeric(q: Sequence[float] | np.ndarray) -> np.ndarray:
+def fk_numeric(q: Sequence[float] | np.ndarray) -> Matrix44:
     """Compute T06 (4x4) numerically from joint angles q (rad).
 
     This uses the exact same DH lists and theta offsets as demo_standard_6R().
@@ -101,24 +106,34 @@ def fk_numeric(q: Sequence[float] | np.ndarray) -> np.ndarray:
     if len(q) != 6:
         raise ValueError("q must have length 6")
     th = np.asarray(q, dtype=float) + dh_num.theta_offset
-    T = np.eye(4)
+    T = np.eye(4, dtype=float)
     for i in range(6):
-        T = T @ dh_T(float(dh_num.a[i]), float(dh_num.alpha[i]), float(dh_num.d[i]), float(th[i]))
+        T = T @ dh_T(
+            float(dh_num.a[i]),
+            float(dh_num.alpha[i]),
+            float(dh_num.d[i]),
+            float(th[i]),
+        )
     return T
 
 
-def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[np.ndarray]:
+def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[Matrix44]:
     """Return [T00, T01, …, T06] for current q."""
     th = np.asarray(q, dtype=float) + dh_num.theta_offset
-    Ts: list[np.ndarray] = [np.eye(4)]
-    T = np.eye(4)
+    Ts: list[Matrix44] = [cast(Matrix44, np.eye(4, dtype=float))]
+    T = np.eye(4, dtype=float)
     for i in range(6):
-        T = T @ dh_T(float(dh_num.a[i]), float(dh_num.alpha[i]), float(dh_num.d[i]), float(th[i]))
-        Ts.append(T)
+        T = T @ dh_T(
+            float(dh_num.a[i]),
+            float(dh_num.alpha[i]),
+            float(dh_num.d[i]),
+            float(th[i]),
+        )
+        Ts.append(cast(Matrix44, T))
     return Ts
 
 
-def geometric_jacobian(q: Sequence[float] | np.ndarray) -> np.ndarray:
+def geometric_jacobian(q: Sequence[float] | np.ndarray) -> NDArray[np.float64]:
     """6x6 geometric Jacobian at q using base frame coordinates.
 
     J = [ Jv; Jw ], where for revolute joints i (i=1..6):
@@ -139,7 +154,7 @@ def geometric_jacobian(q: Sequence[float] | np.ndarray) -> np.ndarray:
     return J
 
 
-def rotation_error_vee(R_cur: np.ndarray, R_des: np.ndarray) -> np.ndarray:
+def rotation_error_vee(R_cur: Matrix33, R_des: Matrix33) -> Vector3:
     """Return so(3) error vector e such that small e ≈ minimal rotation from R_cur→R_des.
 
     Uses the rotation logarithm to stay well-behaved near 180° differences.
@@ -165,7 +180,7 @@ def rotation_error_vee(R_cur: np.ndarray, R_des: np.ndarray) -> np.ndarray:
     return factor * np.array([skew[2, 1], skew[0, 2], skew[1, 0]], dtype=float)
 
 
-def rotation_angle(RA: np.ndarray, RB: np.ndarray) -> float:
+def rotation_angle(RA: Matrix33, RB: Matrix33) -> float:
     """Angle between two rotations in radians."""
     R = RA.T @ RB
     tr = float(np.clip((np.trace(R) - 1.0) * 0.5, -1.0, 1.0))
