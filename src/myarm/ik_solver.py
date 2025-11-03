@@ -26,6 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .dh_params import DHParamsNum, demo_standard_6R_num
+from .orientation import rotation_xy_dash_z_numeric as rotation_xy_dash_z
 
 # currently, keep it as static var to simplify code
 dh_num: DHParamsNum = demo_standard_6R_num()
@@ -61,18 +62,6 @@ def _tx(a: float) -> Matrix44:
     M = np.eye(4, dtype=float)
     M[0, 3] = a
     return cast(Matrix44, M)
-
-
-def rotation_xy_dash_z(alpha: float, beta: float, gamma: float) -> Matrix33:
-    """Return rotation matrix for intrinsic XY'Z' (≡ extrinsic Z-Y-X) angles."""
-    ca, sa = math.cos(alpha), math.sin(alpha)
-    cb, sb = math.cos(beta), math.sin(beta)
-    cg, sg = math.cos(gamma), math.sin(gamma)
-
-    Rx = np.array([[1.0, 0.0, 0.0], [0.0, ca, -sa], [0.0, sa, ca]], dtype=float)
-    Ry = np.array([[cb, 0.0, sb], [0.0, 1.0, 0.0], [-sb, 0.0, cb]], dtype=float)
-    Rz = np.array([[cg, -sg, 0.0], [sg, cg, 0.0], [0.0, 0.0, 1.0]], dtype=float)
-    return cast(Matrix33, Rx @ Ry @ Rz)
 
 
 def pose_from_xyz_euler(

@@ -7,7 +7,8 @@ from typing import Any, cast
 import numpy as np
 import sympy as sp
 
-from myarm.solver import Rx, Ry, Rz, T_to_euler_xy_dash_z
+from myarm.orientation import rotation_xy_dash_z_symbolic
+from myarm.solver import T_to_euler_xy_dash_z
 
 
 def R3(M: sp.Matrix) -> sp.Matrix:
@@ -30,7 +31,7 @@ def check_numeric_once(T06: sp.Matrix, subs_map: Mapping[sp.Symbol, float]) -> t
     a_num, b_num, g_num = T_to_euler_xy_dash_z(T_num, safe=True)
 
     # 3) reconstruct Rrec numerically (consistent 3x3)
-    Rrec_num = sp.N(R3(Rx(a_num)) * R3(Ry(b_num)) * R3(Rz(g_num)), 15)  # type: ignore[no-untyped-call]
+    Rrec_num = sp.N(rotation_xy_dash_z_symbolic(a_num, b_num, g_num), 15)  # type: ignore[no-untyped-call]
 
     # 4) error metrics
     Delta = sp.N(R_num - Rrec_num, 15)  # type: ignore[no-untyped-call]
