@@ -11,17 +11,17 @@ Prerequisites:
 Create the environment and explore the CLI:
 
 ```ps1
-uv sync
-uv run myarm -- fk symbolic           # show symbolic T06
-uv run myarm -- fk eval --preset 1 2  # evaluate presets (degrees)
-uv run myarm -- fk random --count 3   # random numeric checks
-uv run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
-uv run myarm -- ik solve --from-q 0 0 1.57 0 0 0
+uv.exe sync
+uv.exe run myarm -- fk symbolic                              # show symbolic T06
+uv.exe run myarm -- fk eval --preset 1 2 3 4 5 --deg         # evaluate presets (degrees)
+uv.exe run myarm -- fk random --count 3                      # random numeric checks
+uv.exe run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
+uv.exe run myarm -- ik solve --from-q 0 0 1.57 0 0 0
 ```
 
 ### CLI Overview
 
-All tooling is exposed through `uv run myarm -- <group> <command>`. Key groups:
+All tooling is exposed through `uv(.exe) run myarm -- <group> <command>`. Key groups:
 
 - `fk` – forward kinematics utilities
   - `symbolic`  Show symbolic `T06`; add `--steps` for `T01..T06`, `--euler` for symbolic XY'Z' Euler angles, `--no-eval` to skip evaluation at the rest pose.
@@ -32,10 +32,10 @@ All tooling is exposed through `uv run myarm -- <group> <command>`. Key groups:
   - `solve`     Damped-least-squares IK solver. Provide a target as `--T` (16 row-major values) or `--from-q` (6 joints). Optional seeds via repeatable `--seed`.
   - `euler`     Analytic + numeric IK for XYZ + intrinsic XY'Z' Euler targets. Accepts `--target x y z α β γ` with `--pos-unit m|mm`, `--deg`.
 - `verify` – CoppeliaSim validation utilities
-  - `fk`        Mirror of the previous `verify_fk` script.
-  - `ik`        Mirror of the previous `verify_ik` script.
+  - `fk`        Compare symbolic FK against the simulator using presets, `--q`, or `--csv` joint sets. Tolerances configurable via `--tol-pos` (m) and `--tol-rot` (deg).
+  - `ik`        Capture the live simulator pose, solve IK, and optionally `--apply` the best solution back to CoppeliaSim. Control tolerances with `--tol-pos-mm` and `--tol-rot-deg`.
 
-Run `uv run myarm -- <group> <command> --help` for detailed arguments.
+Run `uv(.exe) run myarm -- <group> <command> --help` for detailed arguments.
 
 ## CoppeliaSim Verification
 
@@ -45,14 +45,14 @@ The verification subcommands connect to CoppeliaSim through the ZMQ remote API a
 2. From the repo root, run:
 
 ```ps1
-uv run myarm -- verify fk
+uv.exe run myarm -- verify fk
 # Provide custom joint sets (degrees)
-uv run myarm -- verify fk --q 30 0 90 60 0 0 --deg
+uv.exe run myarm -- verify fk --q 30 0 90 60 0 0 --deg
 # Verify IK using the current simulator pose and apply the best solution
-uv run myarm -- verify ik --apply
+uv.exe run myarm -- verify ik --apply
 ```
 
-Common flags include `--host/--port`, repeatable `--joint`, `--tip`, `--base`, `--deg`, `--unit-scale`, `--tol-pos`, and `--tol-rot`. IK verification also supports `--tol-pos-mm`, `--tol-rot-deg`, `--max-iter`, and `--lmbda`. Example logs are stored in `report/lab4/verification_results.log`.
+Common flags include `--host/--port`, repeatable `--joint`, `--tip`, `--base`, `--deg`, `--unit-scale`, `--tol-pos`, and `--tol-rot`. IK verification also supports `--tol-pos-mm`, `--tol-rot-deg`, `--max-iter`, and `--lmbda`. FK runs are logged under `report/lab3-fk/verification_results.log`; IK runs under `report/lab3-ik/verification_results.log`.
 
 ## Euler Convention (XY'Z')
 
@@ -68,38 +68,43 @@ When `beta = ±π/2`, the CLI switches to a gimbal-lock-safe reconstruction by c
 
 ## Project Layout
 
-- `src/myarm/solver.py`                Core FK helpers (`fk_standard`, XY'Z' utilities, demo setup)
-- `src/myarm/main.py`                  Unified CLI entry point (`myarm`)
+- `src/myarm/fk_solver.py`             Symbolic & numeric FK helpers (build `T06`, XY'Z' conversions)
+- `src/myarm/ik_solver.py`             Damped least-squares IK core plus utilities (`pose_from_xyz_euler`)
+- `src/myarm/orientation.py`           XY'Z' Euler helpers shared across modules
+- `src/myarm/dh_params.py`             Demo DH definitions (ZJU-I arm)
+- `src/myarm/coppelia_utils.py`        Thin wrapper over the CoppeliaSim ZMQ remote API
+- `src/myarm/verify_fk_coppelia.py`    FK verification routines (reused by CLI)
+- `src/myarm/verify_ik_coppelia.py`    IK verification routines (reused by CLI)
 - `src/myarm/numerical_checker.py`     Numeric XY'Z' reconstruction checks
-- `src/myarm/ik_solver.py`             Damped least-squares IK implementation
-- `src/myarm/verify_fk_coppelia.py`    FK verification helpers (reused by CLI)
-- `src/myarm/verify_ik_coppelia.py`    IK verification helpers (reused by CLI)
-- `report/`                            Experiment logs and notes
+- `src/myarm/presets.py`               Joint angle presets (degrees)
+- `src/myarm/main.py`                  Unified CLI entry point (`myarm`)
+- `scripts/verify_cases.py`            Batch verification script for canned IK/FK scenarios
+- `report/`                            Experiment logs and notes (`lab3-fk/`, `lab3-ik/`)
 - `typings/`                           Third-party `.pyi` stubs (added to `mypy_path`)
 
 ## Reproducing the Experiment
 
-1. Inspect symbolic FK: `uv run myarm -- fk symbolic --euler`
-2. Evaluate the five preset configurations: `uv run myarm -- fk eval --preset 1 2 3 4 5 --deg`
-3. Run numeric checks: `uv run myarm -- fk random --count 5`
-4. (Optional) Verify in CoppeliaSim: `uv run myarm -- verify fk --deg`
+1. Inspect symbolic FK: `uv.exe run myarm -- fk symbolic --euler`
+2. Evaluate the five preset configurations: `uv.exe run myarm -- fk eval --preset 1 2 3 4 5 --deg`
+3. Run numeric checks: `uv.exe run myarm -- fk random --count 5`
+4. (Optional) Verify in CoppeliaSim: `uv.exe run myarm -- verify fk --deg`
 
-All expected tolerances and outputs are documented in `report/lab4/verification_results.log`.
+All expected tolerances and outputs are documented in `report/lab3-fk/verification_results.log`.
 
-- Solve lab4 IK poses directly from task-space targets: `uv run myarm -- ik euler --target …`.
-- Batch replay the assignment cases against CoppeliaSim: `uv run python scripts/verify_cases.py` (results in `report/lab4/verification_results.log`).
-- 解析推导、命令及实验记录汇总：`report/lab4/report.md` 与生成的 `report/3230102841-2-项科深.pdf`.
+- Solve lab3 IK poses directly from task-space targets: `uv.exe run myarm -- ik euler --target …`.
+- Batch replay the assignment cases against CoppeliaSim: `uv.exe run python scripts/verify_cases.py` (results in `report/lab3-ik/verification_results.log`).
+- Outputs and analysis live in `report/lab3-ik/report.md`.
 
 ## Development Notes
 
-- Run static checks with `uv run mypy . --strict` or `uv run pyright`.
+- Run static checks with `uv.exe run mypy . --strict` or `uv.exe run pyright`.
 - DH parameters use millimeters. CoppeliaSim verification defaults to `--unit-scale 0.001` to convert to meters.
 - Avoid `|cos(beta)| ≈ 0` for XY'Z' to stay away from singularities during random sampling.
 - Recommended VS Code settings:
 
 ```json
 {
-    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.typeCheckingMode": "standard",
     "python.analysis.stubPath": "./typings"
 }
 ```
