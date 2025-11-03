@@ -181,8 +181,7 @@ def _print_ik_solutions(T_des: "np.ndarray", results: list[tuple["np.ndarray", f
     for i, (q, pe, re, it) in enumerate(results[:limit], 1):
         qlist = [float(x) for x in q]
         qdeg = [round(_deg(v), 3) for v in qlist]
-        iter_label = f"iters={it}" if it >= 0 else "iters=nsolve"
-        print(f"\nSol {i}: {iter_label}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
+        print(f"\nSol {i}: iters={it}, pos_err={pe:.3e} mm, rot_err={_deg(re):.4f} deg")
         print("  q (rad):", [round(v, 6) for v in qlist])
         print("  q (deg):", qdeg)
 
@@ -345,11 +344,6 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("m", "mm"),
         default="m",
         help="units for x y z (default: meters)",
-    )
-    ik_euler.add_argument(
-        "--nsolve",
-        action="store_true",
-        help="refine solutions via sympy.nsolve starting from numeric IK",
     )
     _add_ik_common_arguments(ik_euler, "interpret Euler angles and --seed in degrees")
     ik_euler.set_defaults(func=cmd_ik_euler)
