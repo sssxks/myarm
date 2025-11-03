@@ -196,7 +196,7 @@ def _add_ik_common_arguments(parser: argparse.ArgumentParser, deg_help: str) -> 
     parser.add_argument("--lmbda", type=float, default=1e-3, help="damping λ")
     parser.add_argument("--w-pos", type=float, default=1.0, help="weight for position (mm)")
     parser.add_argument("--w-rot", type=float, default=200.0, help="weight for rotation (rad)")
-    parser.add_argument("--tol-pos", type=float, default=1e-4, help="pos tol (mm)")
+    parser.add_argument("--tol-pos", type=float, default=1e-2, help="pos tol (mm)")
     parser.add_argument("--tol-rot-deg", type=float, default=0.1, help="rot tol (deg)")
     parser.add_argument("--step-clip", type=float, default=0.5, help="max |Δq| per iter (rad)")
     parser.add_argument("--limit", type=int, default=8, help="print up to N solutions")

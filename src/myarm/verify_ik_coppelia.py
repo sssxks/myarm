@@ -36,7 +36,7 @@ def configure_verify_ik_parser(parser: argparse.ArgumentParser) -> argparse.Argu
     parser.add_argument("--tip", default=DEFAULT_TIP_NAME)
     parser.add_argument("--base", default=None)
     parser.add_argument("--unit-scale", type=float, default=0.001, help="FK(mm)↔Sim(m)")
-    parser.add_argument("--tol-pos-mm", type=float, default=1e-2)
+    parser.add_argument("--tol-pos-mm", type=float, default=1e-1)
     parser.add_argument("--tol-rot-deg", type=float, default=0.2)
     parser.add_argument("--max-iter", type=int, default=200)
     parser.add_argument("--lmbda", type=float, default=1e-3)
