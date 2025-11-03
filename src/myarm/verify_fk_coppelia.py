@@ -73,8 +73,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     parser.add_argument(
         "--joint",
         dest="joints",
-        action="append",
-        default=list(DEFAULT_JOINT_NAMES),
+        nargs=6,
+        metavar=("J1", "J2", "J3", "J4", "J5", "J6"),
+        help="override joint paths (provide 6 names)",
+        default=None,
     )
     parser.add_argument("--tip", default=DEFAULT_TIP_NAME)
     parser.add_argument("--base", default=None)
@@ -111,9 +113,10 @@ def run_verify_fk(args: argparse.Namespace) -> int:
     T06_sym, theta_syms = build_T06_symbolic()
     _, sim = connect_coppelia(args.host, args.port)
 
-    if len(args.joints) != 6:
-        raise SystemExit(f"Expected 6 joints, got {len(args.joints)}")
-    joints = [get_object_handle(sim, name) for name in args.joints]
+    joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
+    if len(joint_names) != 6:
+        raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
+    joints = [get_object_handle(sim, name) for name in joint_names]
     tip = get_object_handle(sim, args.tip)
     base = get_object_handle(sim, args.base) if args.base else None
 
