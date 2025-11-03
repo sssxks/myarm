@@ -33,9 +33,7 @@ from myarm.ik_solver import (
     IKOptions,
     fk_numeric,
     pose_from_xyz_euler,
-    rotation_angle,
     solve_ik,
-    solve_ik_nsolve,
 )
 from myarm.numerical_checker import check_numeric_once
 from myarm.solver import T_to_euler_xy_dash_z
@@ -64,10 +62,6 @@ def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[_rad(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
-
-
-def _wrap_angles(values: Sequence[float]) -> list[float]:
-    return [((v + math.pi) % (2 * math.pi)) - math.pi for v in values]
 
 
 PRESETS_DEG = [
@@ -291,70 +285,6 @@ def cmd_ik_euler(args: argparse.Namespace) -> int:
         print("No solution found. Try adjusting seeds or tolerances.")
         return 1
     limit = int(args.limit)
-
-    if args.nsolve:
-        import numpy as np
-
-        candidate_entries: list[tuple[np.ndarray, float, float]] = [
-            (np.asarray(q, dtype=float), pe, re) for q, pe, re, _ in results
-        ]
-        candidate_qs = [entry[0] for entry in candidate_entries]
-        if options.w_rot > 1e-6:
-            trans_opts = IKOptions(
-                max_iter=options.max_iter,
-                lambda_dls=options.lambda_dls,
-                w_pos=options.w_pos,
-                w_rot=1e-6,
-                tol_pos=options.tol_pos,
-                tol_rot=options.tol_rot,
-                step_clip=options.step_clip,
-            )
-            trans_results = solve_ik(T_des, seeds=seeds or None, opts=trans_opts)
-            for q_trans, pe_t, re_t, _ in trans_results:
-                if any(np.allclose(q_trans, cand, atol=1e-3, rtol=0.0) for cand in candidate_qs):
-                    continue
-                arr = np.asarray(q_trans, dtype=float)
-                candidate_entries.append((arr, pe_t, re_t))
-                candidate_qs.append(arr)
-
-        candidate_entries.sort(key=lambda entry: (entry[1], entry[2]))
-        ordered = candidate_entries
-        candidates = [entry[0] for entry in (ordered[:limit] if limit > 0 else ordered)]
-        attempted = len(candidates)
-        refined: list[tuple["np.ndarray", float, float, int]] = []
-        failures = 0
-        offsets = [
-            np.zeros(6, dtype=float),
-            np.array([0.0, 0.0, 0.0, math.pi, 0.0, 0.0], dtype=float),
-            np.array([0.0, 0.0, 0.0, 0.0, math.pi, 0.0], dtype=float),
-            np.array([0.0, 0.0, 0.0, 0.0, 0.0, math.pi], dtype=float),
-            np.array([0.0, 0.0, 0.0, math.pi, math.pi, 0.0], dtype=float),
-            np.array([0.0, 0.0, 0.0, math.pi, 0.0, math.pi], dtype=float),
-            np.array([0.0, 0.0, 0.0, 0.0, math.pi, math.pi], dtype=float),
-        ]
-        for q in candidates:
-            success = False
-            for offset in offsets:
-                variant = _wrap_angles((q + offset).tolist())
-                try:
-                    q_ref = solve_ik_nsolve(T_des, variant)
-                except Exception:
-                    continue
-                if any(np.allclose(q_ref, existing[0], atol=1e-6, rtol=0.0) for existing in refined):
-                    success = True
-                    break
-                T_fk = fk_numeric(q_ref)
-                pos_err = float(np.linalg.norm(T_fk[:3, 3] - T_des[:3, 3]))
-                rot_err = rotation_angle(T_fk[:3, :3], T_des[:3, :3])
-                refined.append((q_ref, pos_err, rot_err, -1))
-                success = True
-                break
-            if not success:
-                failures += 1
-        if refined:
-            results = refined
-        if attempted:
-            print(f"\nNsolve refinement: {len(refined)} succeeded, {failures} failed.")
 
     xyz_mm = [round(v, 3) for v in (x_mm, y_mm, z_mm)]
     euler_rad = [round(v, 6) for v in (alpha_r, beta_r, gamma_r)]

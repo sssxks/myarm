@@ -29,6 +29,7 @@ dev = [
     "microsoft-python-type-stubs",
     "mypy>=1.18.2",
     "pyright>=1.1.407",
+    "vulture>=2.14",
 ]
 
 [tool.mypy]

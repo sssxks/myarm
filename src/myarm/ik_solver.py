@@ -20,26 +20,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from functools import lru_cache
 from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
 from .dh_params import demo_standard_6R_num
 
-if TYPE_CHECKING:
-    import sympy as sp
-
 # currently, keep it as static var to simplify code
 dh_num = demo_standard_6R_num()
-
-
-@lru_cache(maxsize=1)
-def _symbolic_fk() -> tuple["sp.Matrix", list["sp.Symbol"]]:
-    from .dh_params import demo_standard_6R
-
-    T_sym, th_syms, _ = demo_standard_6R()
-    return T_sym, th_syms
 
 # ---- Small numeric helpers ----
 def _rotz(theta: float) -> np.ndarray:
@@ -156,7 +144,7 @@ def rotation_error_vee(R_cur: np.ndarray, R_des: np.ndarray) -> np.ndarray:
 
     Uses the rotation logarithm to stay well-behaved near 180° differences.
     """
-    R_err = R_des.T @ R_cur
+    R_err = R_des @ R_cur.T
     angle = rotation_angle(R_cur, R_des)
     if angle < 1e-9:
         return np.zeros(3, dtype=float)
@@ -342,31 +330,6 @@ def solve_ik(
     return out
 
 
-def solve_ik_nsolve(T_des: np.ndarray, guess: Sequence[float]) -> np.ndarray:
-    """Refine an IK guess using SymPy's nsolve."""
-    import sympy as sp
-
-    from .solver import T_to_euler_xy_dash_z
-
-    T_sym, th_syms = _symbolic_fk()
-    T_target = sp.Matrix(T_des.tolist())
-    alpha_sym, beta_sym, gamma_sym = T_to_euler_xy_dash_z(T_sym, safe=False)
-    alpha_tar, beta_tar, gamma_tar = T_to_euler_xy_dash_z(T_target, safe=False)
-    eqs = [
-        T_sym[0, 3] - T_target[0, 3],
-        T_sym[1, 3] - T_target[1, 3],
-        T_sym[2, 3] - T_target[2, 3],
-        alpha_sym - alpha_tar,
-        beta_sym - beta_tar,
-        gamma_sym - gamma_tar,
-    ]
-
-    guess_vec = [float(v) for v in guess]
-    sol = sp.nsolve(eqs, th_syms, guess_vec, tol=1e-12, maxsteps=200)
-    values = [float(_wrap_to_pi(float(s))) for s in sol]
-    return np.array(values, dtype=float)
-
-
 __all__ = [
     "IKOptions",
     "fk_numeric",
@@ -375,5 +338,4 @@ __all__ = [
     "rotation_xy_dash_z",
     "rotation_angle",
     "solve_ik",
-    "solve_ik_nsolve",
 ]
