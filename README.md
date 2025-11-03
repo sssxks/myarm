@@ -30,7 +30,7 @@ All tooling is exposed through `uv run myarm -- <group> <command>`. Key groups:
   - `dh`        Print the DH parameter lists.
 - `ik` – inverse kinematics helpers
   - `solve`     Damped-least-squares IK solver. Provide a target as `--T` (16 row-major values) or `--from-q` (6 joints). Optional seeds via repeatable `--seed`.
-  - `euler`     Analytic + numeric IK for XYZ + intrinsic XY'Z' Euler targets. Accepts `--target x y z α β γ` with `--pos-unit m|mm`, `--deg`, and `--nsolve` for SymPy refinement.
+  - `euler`     Analytic + numeric IK for XYZ + intrinsic XY'Z' Euler targets. Accepts `--target x y z α β γ` with `--pos-unit m|mm`, `--deg`.
 - `verify` – CoppeliaSim validation utilities
   - `fk`        Mirror of the previous `verify_fk` script.
   - `ik`        Mirror of the previous `verify_ik` script.

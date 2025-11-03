@@ -26,7 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .dh_params import DHParamsNum, demo_standard_6R_num
-from .orientation import rotation_xy_dash_z_numeric as rotation_xy_dash_z
+from .orientation import rotation_xy_dash_z_numeric
 
 # currently, keep it as static var to simplify code
 dh_num: DHParamsNum = demo_standard_6R_num()
@@ -70,7 +70,7 @@ def pose_from_xyz_euler(
     """Build a homogeneous transform from XYZ translation (mm) and XY'Z' angles (rad)."""
     T = np.eye(4, dtype=float)
     T[:3, 3] = np.array([x_mm, y_mm, z_mm], dtype=float)
-    T[:3, :3] = rotation_xy_dash_z(alpha, beta, gamma)
+    T[:3, :3] = rotation_xy_dash_z_numeric(alpha, beta, gamma)
     return T
 
 def _wrap_to_pi(v: float) -> float:
@@ -339,7 +339,7 @@ __all__ = [
     "fk_numeric",
     "geometric_jacobian",
     "pose_from_xyz_euler",
-    "rotation_xy_dash_z",
+    "rotation_xy_dash_z_numeric",
     "rotation_angle",
     "solve_ik",
 ]
