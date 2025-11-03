@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from typing import cast
 
 import numpy as np
 import sympy as sp

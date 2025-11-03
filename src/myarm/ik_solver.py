@@ -81,6 +81,15 @@ def _wrap_to_pi(v: float) -> float:
     return x - math.pi
 
 
+def _angle_delta(
+    a: Sequence[float] | np.ndarray, b: Sequence[float] | np.ndarray
+) -> np.ndarray:
+    """Return elementwise wrapped angle difference a-b (rad)."""
+    diff = np.asarray(a, dtype=float) - np.asarray(b, dtype=float)
+    wrapped = [_wrap_to_pi(float(v)) for v in diff]
+    return np.array(wrapped, dtype=float)
+
+
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
 def dh_T(a: float, alpha: float, d: float, theta: float) -> Matrix44:
     """Standard DH: Rz(theta) Tz(d) Tx(a) Rx(alpha)."""
@@ -258,7 +267,8 @@ def unique_solutions(solutions: Iterable[np.ndarray], tol: float = 1e-3) -> list
     for q in solutions:
         keep = True
         for u in uniq:
-            if float(np.max(np.abs(q - u))) <= tol:
+            delta = _angle_delta(q, u)
+            if float(np.max(np.abs(delta))) <= tol:
                 keep = False
                 break
         if keep:
@@ -300,8 +310,8 @@ def solve_ik(
     results: list[tuple[np.ndarray, float, float, int]] = []
     tried: list[np.ndarray] = []
     for s_arr in seed_list:
-        # Avoid re‑trying very similar seeds
-        if tried and any(float(np.max(np.abs(s_arr - t))) < 1e-3 for t in tried):
+        # Avoid re-trying very similar seeds
+        if tried and any(float(np.max(np.abs(_angle_delta(s_arr, t)))) < 1e-3 for t in tried):
             continue
         tried.append(s_arr)
         q, pe, re, it = _ik_once_dls(T_des, s_arr, opts)

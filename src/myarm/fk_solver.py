@@ -5,7 +5,6 @@ Angles in radians.
 Functions:
 - fk_standard(a, alpha, d, theta)
 - fk_modified(a_prev, alpha_prev, d, theta)
-- demo_standard_6R()  # returns a symbolic T06 and joint symbols for the ZJU‑I arm
 - rot_to_euler_xy_dash_z(R)           # intrinsic XY'Z' (≡ extrinsic Z‑Y‑X)
 - T_to_euler_xy_dash_z(T, safe=True)  # convenience wrapper for a 4x4 T
 """
@@ -59,7 +58,8 @@ def fk_standard(
     theta: Sequence[Num],
     simplify: bool = True,
 ) -> sp.Matrix:
-    assert len(a) == len(alpha) == len(d) == len(theta)
+    if len(a) != len(alpha) or len(a) != len(d) or len(a) != len(theta):
+        raise ValueError("a, alpha, d, theta must have the same length")
     T = cast(sp.Matrix, sp.eye(4))  # type: ignore[no-untyped-call]
     for ai, al, di, th in zip(a, alpha, d, theta):
         Ti = Rz(th) * Tz(di) * Tx(ai) * Rx(al)
@@ -179,7 +179,8 @@ def fk_modified(
     theta: Sequence[Num],
     simplify: bool = True,
 ) -> sp.Matrix:
-    assert len(a_prev) == len(alpha_prev) == len(d) == len(theta)
+    if len(a_prev) != len(alpha_prev) or len(a_prev) != len(d) or len(a_prev) != len(theta):
+        raise ValueError("a_prev, alpha_prev, d, theta must have the same length")
     T = cast(sp.Matrix, sp.eye(4))  # type: ignore[no-untyped-call]
     for ap, alp, di, th in zip(a_prev, alpha_prev, d, theta):
         Ti = Rx(alp) * Tx(ap) * Rz(th) * Tz(di)

@@ -128,7 +128,12 @@ def cmd_fk_random(args: argparse.Namespace) -> int:
         if abs(math.cos(float(b))) < 1e-6:
             continue  # skip near gimbal lock
         print(f"\nSample {printed + 1}:")
-        check_numeric_once(T06, subs)
+        result = check_numeric_once(T06, subs)
+        print("XY'Z' (rad):", result.alpha, result.beta, result.gamma)
+        print(
+            f"||R-Rrec||_F = {result.err_F:.3e},  ||R-Rrec||_inf = {result.err_inf:.3e}"
+        )
+        sp.pprint(result.delta)  # type: ignore[operator]
         printed += 1
     return 0
 
