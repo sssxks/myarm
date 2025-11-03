@@ -111,44 +111,48 @@ def _collect_joint_sets(args: argparse.Namespace) -> list[list[float]]:
 def run_verify_fk(args: argparse.Namespace) -> int:
     joint_sets = _collect_joint_sets(args)
     T06_sym, theta_syms = build_T06_symbolic()
-    _, sim = connect_coppelia(args.host, args.port)
+    client, sim = connect_coppelia(args.host, args.port)
 
-    joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
-    if len(joint_names) != 6:
-        raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
-    joints = [get_object_handle(sim, name) for name in joint_names]
-    tip = get_object_handle(sim, args.tip)
-    base = get_object_handle(sim, args.base) if args.base else None
+    try:
+        joint_names = list(args.joints) if args.joints is not None else list(DEFAULT_JOINT_NAMES)
+        if len(joint_names) != 6:
+            raise SystemExit(f"Expected 6 joints, got {len(joint_names)}")
+        joints = [get_object_handle(sim, name) for name in joint_names]
+        tip = get_object_handle(sim, args.tip)
+        base = get_object_handle(sim, args.base) if args.base else None
 
-    print("Verifying (pos m, rot deg)…")
-    num_pass = 0
-    for index, q in enumerate(joint_sets, start=1):
-        set_joint_positions(sim, joints, q, mode=args.mode)
-        time.sleep(max(args.sleep, 0.0))
+        print("Verifying (pos m, rot deg)…")
+        num_pass = 0
+        for index, q in enumerate(joint_sets, start=1):
+            set_joint_positions(sim, joints, q, mode=args.mode)
+            time.sleep(max(args.sleep, 0.0))
 
-        matrix_sim = get_matrix4(sim, tip, base)
-        T_fk = eval_T_numeric(T06_sym, theta_syms, q)
-        matrix_fk = spT_to_np(T_fk, unit_scale=args.unit_scale)
+            matrix_sim = get_matrix4(sim, tip, base)
+            T_fk = eval_T_numeric(T06_sym, theta_syms, q)
+            matrix_fk = spT_to_np(T_fk, unit_scale=args.unit_scale)
 
-        pos_err = translation_error(matrix_fk, matrix_sim)
-        rot_err = rotation_angle_deg(matrix_fk[:3, :3], matrix_sim[:3, :3])
-        passed = (pos_err <= args.tol_pos) and (rot_err <= args.tol_rot)
+            pos_err = translation_error(matrix_fk, matrix_sim)
+            rot_err = rotation_angle_deg(matrix_fk[:3, :3], matrix_sim[:3, :3])
+            passed = (pos_err <= args.tol_pos) and (rot_err <= args.tol_rot)
 
-        print(f"\nCase {index}: {'PASS' if passed else 'FAIL'}")
-        print("  q (rad):", [round(value, 4) for value in q])
-        print(f"  pos_err: {pos_err * 1000:.3f} mm ({pos_err:.6f} m)")
-        print(f"  rot_err: {rot_err:.3f} deg")
-        if passed:
-            num_pass += 1
-        np.set_printoptions(precision=4, suppress=True)
-        print("  M_fk:\n", matrix_fk)
-        print("  M_sim:\n", matrix_sim)
+            print(f"\nCase {index}: {'PASS' if passed else 'FAIL'}")
+            print("  q (rad):", [round(value, 4) for value in q])
+            print(f"  pos_err: {pos_err * 1000:.3f} mm ({pos_err:.6f} m)")
+            print(f"  rot_err: {rot_err:.3f} deg")
+            if passed:
+                num_pass += 1
+            np.set_printoptions(precision=4, suppress=True)
+            print("  M_fk:\n", matrix_fk)
+            print("  M_sim:\n", matrix_sim)
 
-    print(
-        f"\nSummary: {num_pass}/{len(joint_sets)} passed "
-        f"(tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
-    )
-    return 0
+        print(
+            f"\nSummary: {num_pass}/{len(joint_sets)} passed "
+            f"(tol_pos={args.tol_pos} m, tol_rot={args.tol_rot} deg)"
+        )
+        return 0
+    finally:
+        if hasattr(client, "close"):
+            client.close()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
