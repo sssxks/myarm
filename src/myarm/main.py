@@ -39,6 +39,11 @@ from myarm.ik_solver import (
 from myarm.numerical_checker import check_numeric_once
 from myarm.presets import PRESETS_DEG
 from myarm.fk_solver import T_to_euler_xy_dash_z
+from myarm.jacobian import (
+    JacobianSymbolic,
+    symbolic_geometric_jacobian,
+    evaluate_numeric_geometric_jacobian,
+)
 from myarm.verify_fk_coppelia import configure_verify_fk_parser, run_verify_fk
 from myarm.verify_ik_coppelia import configure_verify_ik_parser, run_verify_ik
 
@@ -54,6 +59,12 @@ def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[radians(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
+
+
+def _parse_single_q(row: Sequence[float], deg: bool) -> list[float]:
+    if len(row) != 6:
+        raise SystemExit("Expected 6 joint values (q1..q6)")
+    return [radians(v) for v in row] if deg else [float(v) for v in row]
 
 
 def cmd_fk_symbolic(args: argparse.Namespace) -> int:
@@ -144,6 +155,46 @@ def cmd_fk_dh(_args: argparse.Namespace) -> int:
     print("alpha:", params["alpha"])
     print("d:", params["d"])
     print("theta (symbolic):", params["theta"])
+    return 0
+
+
+def cmd_jacobian_symbolic(args: argparse.Namespace) -> int:
+    jac: JacobianSymbolic = symbolic_geometric_jacobian()
+    if args.block == "linear":
+        matrix = jac.J_linear
+        label = "Linear block (Jv)"
+    elif args.block == "angular":
+        matrix = jac.J_angular
+        label = "Angular block (Jω)"
+    else:
+        matrix = jac.geometric
+        label = "Full geometric Jacobian"
+    if args.q is not None:
+        q_vals = _parse_single_q(args.q, args.deg)
+        subs = {sym: val for sym, val in zip(jac.thetas, q_vals)}
+        matrix = sp.N(matrix.subs(subs), int(args.digits))  # type: ignore[no-untyped-call]
+    print(label + (" (substituted)" if args.q is not None else ""))
+    _pprint_matrix(matrix)
+    return 0
+
+
+def cmd_jacobian_numeric(args: argparse.Namespace) -> int:
+    import numpy as np  # local import to keep CLI startup light
+
+    q_vals = _parse_single_q(args.q, args.deg)
+    full = evaluate_numeric_geometric_jacobian(q_vals)
+    if args.block == "linear":
+        matrix = full[:3, :]
+        label = "Linear block (Jv)"
+    elif args.block == "angular":
+        matrix = full[3:, :]
+        label = "Angular block (Jω)"
+    else:
+        matrix = full
+        label = "Full geometric Jacobian"
+    np.set_printoptions(precision=int(args.digits), suppress=not args.scientific)
+    print(label)
+    print(matrix)
     return 0
 
 
@@ -342,6 +393,49 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_ik_common_arguments(ik_euler, "interpret Euler angles and --seed in degrees")
     ik_euler.set_defaults(func=cmd_ik_euler)
+
+    jacobian = sub.add_parser("jacobian", help="geometric Jacobian helpers")
+    jac_sub = jacobian.add_subparsers(dest="jacobian_command", required=True)
+
+    jac_symbolic = jac_sub.add_parser("symbolic", help="print symbolic Jacobian blocks")
+    jac_symbolic.add_argument(
+        "--block",
+        choices=("full", "linear", "angular"),
+        default="full",
+        help="choose which block to print",
+    )
+    jac_symbolic.add_argument(
+        "--q",
+        nargs=6,
+        type=float,
+        help="optionally substitute q1..q6 (rad unless --deg)",
+    )
+    jac_symbolic.add_argument("--deg", action="store_true", help="interpret --q in degrees")
+    jac_symbolic.add_argument("--digits", type=int, default=6, help="digits for numeric eval")
+    jac_symbolic.set_defaults(func=cmd_jacobian_symbolic)
+
+    jac_numeric = jac_sub.add_parser("numeric", help="evaluate numeric Jacobian at q")
+    jac_numeric.add_argument(
+        "--q",
+        nargs=6,
+        required=True,
+        type=float,
+        help="joint angles q1..q6 (rad unless --deg)",
+    )
+    jac_numeric.add_argument("--deg", action="store_true", help="interpret --q in degrees")
+    jac_numeric.add_argument(
+        "--block",
+        choices=("full", "linear", "angular"),
+        default="full",
+        help="choose which block to print",
+    )
+    jac_numeric.add_argument("--digits", type=int, default=5, help="print precision")
+    jac_numeric.add_argument(
+        "--scientific",
+        action="store_true",
+        help="use scientific notation for numeric output",
+    )
+    jac_numeric.set_defaults(func=cmd_jacobian_numeric)
 
     verify = sub.add_parser("verify", help="compare against CoppeliaSim")
     verify_sub = verify.add_subparsers(dest="verify_command", required=True)

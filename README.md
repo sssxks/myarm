@@ -17,6 +17,8 @@ uv.exe run myarm -- fk eval --preset 1 2 3 4 5 --deg         # evaluate presets 
 uv.exe run myarm -- fk random --count 3                      # random numeric checks
 uv.exe run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --pos-unit m
 uv.exe run myarm -- ik solve --from-q 0 0 1.57 0 0 0
+uv.exe run myarm -- jacobian symbolic --block linear          # print symbolic Jv
+uv.exe run myarm -- jacobian numeric --q 0 0 0 0 0 0         # evaluate J(q)
 ```
 
 ### CLI Overview
@@ -31,6 +33,9 @@ All tooling is exposed through `uv(.exe) run myarm -- <group> <command>`. Key gr
 - `ik` – inverse kinematics helpers
   - `solve`     Damped-least-squares IK solver. Provide a target as `--T` (16 row-major values) or `--from-q` (6 joints). Optional seeds via repeatable `--seed`.
   - `euler`     Analytic + numeric IK for XYZ + intrinsic XY'Z' Euler targets. Accepts `--target x y z α β γ` with `--pos-unit m|mm`, `--deg`.
+- `jacobian` – geometric Jacobian utilities
+  - `symbolic`  Print the symbolic Jacobian. Use `--block full|linear|angular`, optional `--q` (with `--deg`) to substitute a configuration, and `--digits` to control numeric precision.
+  - `numeric`   Evaluate the 6×6 Jacobian for a numeric joint vector via `--q`. Supports `--block`, `--deg`, `--digits`, and `--scientific` for formatting.
 - `verify` – CoppeliaSim validation utilities
   - `fk`        Compare symbolic FK against the simulator using presets, `--q`, or `--csv` joint sets. Tolerances configurable via `--tol-pos` (m) and `--tol-rot` (deg).
   - `ik`        Capture the live simulator pose, solve IK, and optionally `--apply` the best solution back to CoppeliaSim. Control tolerances with `--tol-pos-mm` and `--tol-rot-deg`.

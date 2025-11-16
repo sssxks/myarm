@@ -87,7 +87,6 @@ source = { editable = "." }
 dependencies = [
     { name = "coppeliasim-zmqremoteapi-client" },
     { name = "numpy" },
-    { name = "symbolica" },
     { name = "sympy" },
 ]
 
@@ -103,7 +102,6 @@ dev = [
 requires-dist = [
     { name = "coppeliasim-zmqremoteapi-client", specifier = ">=2.0.4" },
     { name = "numpy", specifier = ">=2.3.4" },
-    { name = "symbolica" },
     { name = "sympy", specifier = ">=1.14.0" },
 ]
 
@@ -283,18 +281,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/59/a5f38970f9bf07cee96128de79590bb354917914a9be11272cfc7ff26af0/pyzmq-27.1.0-cp314-cp314t-win32.whl", hash = "sha256:1f0b2a577fd770aa6f053211a55d1c47901f4d537389a034c690291485e5fe92", size = 587472, upload-time = "2025-09-08T23:08:58.18Z" },
     { url = "https://files.pythonhosted.org/packages/70/d8/78b1bad170f93fcf5e3536e70e8fadac55030002275c9a29e8f5719185de/pyzmq-27.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:19c9468ae0437f8074af379e986c5d3d7d7bfe033506af442e8c879732bedbe0", size = 661401, upload-time = "2025-09-08T23:08:59.802Z" },
     { url = "https://files.pythonhosted.org/packages/81/d6/4bfbb40c9a0b42fc53c7cf442f6385db70b40f74a783130c5d0a5aa62228/pyzmq-27.1.0-cp314-cp314t-win_arm64.whl", hash = "sha256:dc5dbf68a7857b59473f7df42650c621d7e8923fb03fa74a526890f4d33cc4d7", size = 575170, upload-time = "2025-09-08T23:09:01.418Z" },
-]
-
-[[package]]
-name = "symbolica"
-version = "0.18.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/87/8ea8f29b0f4193b6feb2eda0094422684863ad94062a75414cdee600cdeb/symbolica-0.18.0.tar.gz", hash = "sha256:60f06ac3c61864af6835eb448114521c3eb3adc2d4e7439cd9396b5d884f08a9", size = 84251, upload-time = "2025-09-04T08:35:24.628Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/c5/1b96e9ed14294a18c876509e81efb844eaafe174b85a7094cbfe7ecf41d1/symbolica-0.18.0-1-cp39-abi3-win_amd64.whl", hash = "sha256:37e9470e67e8c0750a02f47f908a0f73c13541d8ea5b39e8d1703ff0f77dcb5f", size = 22236477, upload-time = "2025-09-19T08:38:16.527Z" },
-    { url = "https://files.pythonhosted.org/packages/a0/45/cfae4a98a1fe9663e5a0e7f232f547308cff3ea732933b2fcb0b7a38ab65/symbolica-0.18.0-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:4fb8bd329642b7ec51a0b9a226954b0312425323b3542f2e63c171e48df05b52", size = 20398835, upload-time = "2025-09-04T08:36:03.815Z" },
-    { url = "https://files.pythonhosted.org/packages/9c/82/d3cf3df128c9188e1b064f87fd88b55b1d8019d959ea1e74cc4558db63f6/symbolica-0.18.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:959dbf51c201db529fe526335df08f4876489f9d63b69c34381364711a5936f6", size = 18412032, upload-time = "2025-09-04T08:36:14.162Z" },
-    { url = "https://files.pythonhosted.org/packages/da/07/6a5e5ea0656efcddb7198cd23fce0780709aef480bbd0757bd2e8194cef0/symbolica-0.18.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f462839b0a5837a8ecbe7dba981e9bb5d57562ef614d94c4597445f707fcd161", size = 20874383, upload-time = "2025-09-04T08:35:52.222Z" },
 ]
 
 [[package]]

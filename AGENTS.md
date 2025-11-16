@@ -11,7 +11,7 @@
 - `dist/` — build artifacts (do not commit). See `.gitignore`.
 
 ## Build, Test, and Development Commands
-- Prefer `uv.exe` on Windows (or `uv` elsewhere) because the workspace venv lives under `.venv`.
+- if you are in WSL, use `uv.exe` instead of `uv` to run the windows cli, otherwise `.venv` will be recreated for wsl.
 - `uv.exe sync` — create/update the environment from `pyproject.toml`/`uv.lock`.
 - `uv.exe run myarm -- fk symbolic|eval|random|dh` — FK tooling.
 - `uv.exe run myarm -- ik solve|euler` — IK solvers.
@@ -22,7 +22,7 @@
 ## Coding Style & Naming Conventions
 - Python ≥ 3.13, 4‑space indent, PEP 8 names: modules/functions `snake_case`, classes `PascalCase`, constants `UPPER_CASE`.
 - Prefer pure, small functions; add docstrings; keep I/O in CLI modules.
-- Type‑hint everything; avoid `Any` when feasible; use `typing.cast` for SymPy where needed (see `fk_solver.py`).
+- Type‑hint everything; avoid `Any` when feasible.
 
 ## Testing Guidelines
 - No pytest suite yet. Validate via:
