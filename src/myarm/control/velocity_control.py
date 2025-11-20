@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 
 from myarm.adapters.coppelia_utils import get_joint_positions
 from .control_utils import clip_joint_velocities, damped_pinv_step
-from myarm.solvers.ik_solver import IKOptions, fk_numeric, geometric_jacobian, rotation_error_vee, solve_ik
+from myarm.solvers.ik_solver import IKOptions, fk_numeric, geometric_jacobian, rotation_error_vee
 from myarm.solvers.trajectories import TrajState
 
 Vector3 = NDArray[np.float64]
@@ -31,22 +31,6 @@ class ControlGains:
     kp_rot: float = 4.0  # rad/s per rad
     lambda_dls: float = 1e-3
     qdot_clip: float = 2.0  # rad/s
-
-
-# ---- Simulator helpers ----
-
-def init_from_pose(sim, joints: list[int], pos_mm: Vector3, rot: Matrix33) -> np.ndarray:
-    """Solve IK for starting pose and push to sim."""
-    T_des = np.eye(4, dtype=float)
-    T_des[:3, :3] = rot
-    T_des[:3, 3] = pos_mm
-    sols = solve_ik(T_des, opts=IKOptions(max_iter=150))
-    if not sols:
-        raise RuntimeError("No IK solution for start pose")
-    q = sols[0][0]
-    for h, val in zip(joints, q):
-        sim.setJointPosition(h, float(val))
-    return q
 
 
 def control_loop(

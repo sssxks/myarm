@@ -16,7 +16,6 @@ from myarm.control.velocity_control import (
     ControlGains,
     configure_draw,
     control_loop,
-    init_from_pose,
     stop_robot,
     HOST,
     PORT,
@@ -56,9 +55,6 @@ def cmd_velocity(args: argparse.Namespace) -> int:
     tip = get_object_handle(sim, DEFAULT_TIP_NAME)
 
     traj_fn = build_traj_fn(args, center_mm)
-
-    init_state = traj_fn(0.0)
-    init_from_pose(sim, joints, init_state.pos_mm, init_state.rot_des)
 
     draw_handle = configure_draw(sim, args.draw, tip, args.draw_max)
 
