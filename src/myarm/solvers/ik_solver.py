@@ -25,8 +25,8 @@ from typing import NamedTuple, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from .dh_params import DHParamsNum, demo_standard_6R_num
-from .orientation import rotation_xy_dash_z_numeric
+from myarm.core.orientation import rotation_xy_dash_z_numeric
+from myarm.model.dh_params import DHParamsNum, demo_standard_6R_num
 
 # currently, keep it as static var to simplify code
 dh_num: DHParamsNum = demo_standard_6R_num()

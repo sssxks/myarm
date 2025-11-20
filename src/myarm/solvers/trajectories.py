@@ -10,7 +10,7 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from myarm.orientation import rotation_xy_dash_z_numeric
+from myarm.core.orientation import rotation_xy_dash_z_numeric
 
 Vector3 = NDArray[np.float64]
 Matrix33 = NDArray[np.float64]

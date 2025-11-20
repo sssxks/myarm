@@ -14,7 +14,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any, cast
 import sympy as sp
 
-from .type_utils import Num
+from myarm.core.type_utils import Num
 
 def Rx(alpha: Num) -> sp.Matrix:
     ca = cast(sp.Expr, sp.cos(alpha))

@@ -7,8 +7,8 @@ from typing import Any, NamedTuple, cast
 import numpy as np
 import sympy as sp
 
-from myarm.orientation import rotation_xy_dash_z_symbolic
-from myarm.fk_solver import T_to_euler_xy_dash_z
+from myarm.core.orientation import rotation_xy_dash_z_symbolic
+from myarm.solvers.fk_solver import T_to_euler_xy_dash_z
 
 
 class NumericCheckResult(NamedTuple):

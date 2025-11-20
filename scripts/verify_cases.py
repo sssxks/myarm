@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from myarm.coppelia_utils import (
+from myarm.adapters.coppelia_utils import (
     DEFAULT_JOINT_NAMES,
     DEFAULT_TIP_NAME,
     connect_coppelia,
@@ -15,7 +15,7 @@ from myarm.coppelia_utils import (
     rotation_angle_rad,
     set_joint_positions,
 )
-from myarm.ik_solver import pose_from_xyz_euler
+from myarm.solvers.ik_solver import pose_from_xyz_euler
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ from typing import cast
 import numpy as np
 import sympy as sp
 
-from myarm.coppelia_utils import (
+from myarm.adapters.coppelia_utils import (
     DEFAULT_JOINT_NAMES,
     DEFAULT_TIP_NAME,
     connect_coppelia,
@@ -19,8 +19,8 @@ from myarm.coppelia_utils import (
     set_joint_positions,
     translation_error,
 )
-from myarm.dh_params import demo_standard_6R
-from myarm.presets import PRESETS_DEG
+from myarm.model.dh_params import demo_standard_6R
+from myarm.model.presets import PRESETS_DEG
 
 
 def build_T06_symbolic() -> tuple[sp.Matrix, list[sp.Symbol]]:

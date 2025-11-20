@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from myarm.coppelia_utils import (
+from myarm.adapters.coppelia_utils import (
     DEFAULT_JOINT_NAMES,
     DEFAULT_TIP_NAME,
     connect_coppelia,
@@ -18,7 +18,7 @@ from myarm.coppelia_utils import (
     rotation_angle_deg,
     set_joint_positions,
 )
-from myarm.ik_solver import IKOptions, fk_numeric, solve_ik
+from myarm.solvers.ik_solver import IKOptions, fk_numeric, solve_ik
 
 
 def configure_verify_ik_parser(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
