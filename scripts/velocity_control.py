@@ -263,8 +263,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", type=str, default=HOST)
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--cone-angle", type=float, default=60.0, help="apex angle (deg)")
-    p.add_argument("--center", type=float, nargs=3, default=[0.200, 0.200, 0.200], help="center/apex in meters")
-    p.add_argument("--draw", action="store_true", help="enable path rendering in CoppeliaSim")
+    p.add_argument("--center", type=float, nargs=3, default=[0.100, 0.100, 0.500], help="center/apex in meters")
+    p.add_argument("--draw", dest="draw", action="store_true", default=True, help="enable path rendering in CoppeliaSim (default)")
+    p.add_argument("--no-draw", dest="draw", action="store_false", help="disable path rendering in CoppeliaSim")
     p.add_argument("--draw-max", type=int, default=2000, help="max drawing segments to keep (cyclic)")
     p.add_argument("--axis", type=float, nargs=3, default=[0.0, 0.0, 1.0], help="spin axis (world frame, xyz)")
     return p
