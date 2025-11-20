@@ -87,6 +87,17 @@ def square_traj(center_mm: Vector3, side_mm: float, speed_m_s: float, t: float) 
     tau = t % total_t
     edge = int(tau // t_edge)
     local_t = tau - edge * t_edge
+    # soften acceleration near corners to avoid overshoot when the direction flips
+    ramp_frac = 0.12  # fraction of each edge spent ramping speed
+    ramp_t = ramp_frac * t_edge
+    if local_t < ramp_t:
+        speed_scale = local_t / ramp_t
+    elif local_t > t_edge - ramp_t:
+        speed_scale = (t_edge - local_t) / ramp_t
+    else:
+        speed_scale = 1.0
+    speed_scale = max(0.1, speed_scale)  # keep small feedforward so it doesn't stall
+
     start_xy = np.array([
         [ -0.5, -0.5 ],
         [  0.5, -0.5 ],
@@ -104,7 +115,7 @@ def square_traj(center_mm: Vector3, side_mm: float, speed_m_s: float, t: float) 
     pos[0] += p_xy[0]
     pos[1] += p_xy[1]
     vel = np.zeros(3, dtype=float)
-    vel[0:2] = dir_xy[edge] * v
+    vel[0:2] = dir_xy[edge] * v * speed_scale
     rot = rotation_xy_dash_z_numeric(math.pi, 0.0, 0.0)  # tool facing down
     return TrajState(pos_mm=pos, rot_des=rot, vel_mm_s=vel, omega_rad_s=np.zeros(3, dtype=float))
 
@@ -124,13 +135,50 @@ def circle_traj(center_mm: Vector3, radius_mm: float, speed_m_s: float, t: float
     return TrajState(pos_mm=pos, rot_des=rot, vel_mm_s=vel, omega_rad_s=np.zeros(3, dtype=float))
 
 
-def cone_traj(apex_mm: Vector3, half_angle_deg: float, ang_speed: float, t: float) -> TrajState:
-    """End-effector rotates about apex; position fixed, orientation spins around world Z."""
+def _orthonormal_basis_from_axis(axis: Vector3) -> tuple[Vector3, Vector3, Vector3]:
+    """Return (n_hat, u, v) where u,v are orthonormal and ⟂ n_hat."""
+    n_norm = float(np.linalg.norm(axis))
+    if n_norm <= 1e-9:
+        raise ValueError("spin axis must be non-zero")
+    n_hat = axis / n_norm
+    # pick a helper not parallel to n_hat
+    helper = np.array([0.0, 0.0, 1.0], dtype=float)
+    if abs(np.dot(helper, n_hat)) > 0.99:
+        helper = np.array([0.0, 1.0, 0.0], dtype=float)
+    u = np.cross(helper, n_hat)
+    u /= np.linalg.norm(u)
+    v = np.cross(n_hat, u)
+    return n_hat, u, v
+
+
+def cone_traj(
+    apex_mm: Vector3,
+    half_angle_deg: float,
+    ang_speed: float,
+    t: float,
+    spin_axis: Vector3 | None = None,
+) -> TrajState:
+    """End-effector orientation traces a cone about the given world-frame spin axis."""
     theta = math.radians(half_angle_deg)
     phi = ang_speed * t
-    # R = Rz(phi) * Ry(theta): tool z tilted theta away from world Z and spinning
-    rot = rotation_xy_dash_z_numeric(0.0, theta, phi)
-    omega = np.array([0.0, 0.0, ang_speed], dtype=float)  # world-frame spin about Z
+
+    n_hat, u, v = _orthonormal_basis_from_axis(spin_axis if spin_axis is not None else np.array([0.0, 0.0, 1.0]))
+
+    # Cone generatrix direction (tool z): tilt by theta from n_hat, sweep with phi around n_hat.
+    z_tool = math.cos(theta) * n_hat + math.sin(theta) * (math.cos(phi) * u + math.sin(phi) * v)
+
+    # x_tool follows the precession around n_hat to keep R spinning with phi.
+    x_tool = np.cross(z_tool, n_hat)
+    norm_x = float(np.linalg.norm(x_tool))
+    if norm_x <= 1e-9:  # theta=0 edge case: choose stable x aligned with u
+        x_tool = u
+    else:
+        x_tool /= norm_x
+    y_tool = np.cross(z_tool, x_tool)
+
+    rot = np.column_stack((x_tool, y_tool, z_tool))
+    # Angular velocity in world frame: spin about the chosen axis.
+    omega = ang_speed * n_hat
     pos = apex_mm
     vel = np.zeros(3, dtype=float)
     return TrajState(pos_mm=pos, rot_des=rot, vel_mm_s=vel, omega_rad_s=omega)
@@ -215,9 +263,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", type=str, default=HOST)
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--cone-angle", type=float, default=60.0, help="apex angle (deg)")
-    p.add_argument("--center", type=float, nargs=3, default=[0.300, 0.000, 0.300], help="center/apex in meters")
+    p.add_argument("--center", type=float, nargs=3, default=[0.200, 0.200, 0.200], help="center/apex in meters")
     p.add_argument("--draw", action="store_true", help="enable path rendering in CoppeliaSim")
     p.add_argument("--draw-max", type=int, default=2000, help="max drawing segments to keep (cyclic)")
+    p.add_argument("--axis", type=float, nargs=3, default=[0.0, 0.0, 1.0], help="spin axis (world frame, xyz)")
     return p
 
 
@@ -243,7 +292,8 @@ def main() -> None:
         traj_fn = lambda t: circle_traj(center_mm.copy(), radius_mm, args.speed, t)
     else:
         half_angle = args.cone_angle / 2.0
-        traj_fn = lambda t: cone_traj(center_mm.copy(), half_angle, args.ang_speed, t)
+        spin_axis = np.array(args.axis, dtype=float)
+        traj_fn = lambda t: cone_traj(center_mm.copy(), half_angle, args.ang_speed, t, spin_axis=spin_axis)
 
     init_state = traj_fn(0.0)
     init_from_pose(sim, joints, init_state.pos_mm, init_state.rot_des)
