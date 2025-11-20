@@ -19,6 +19,7 @@ uv.exe run myarm -- ik euler --target 0.117 0.334 0.499 -2.019 -0.058 -2.190 --p
 uv.exe run myarm -- ik solve --from-q 0 0 1.57 0 0 0
 uv.exe run myarm -- jacobian symbolic --block linear          # print symbolic Jv
 uv.exe run myarm -- jacobian numeric --q 0 0 0 0 0 0         # evaluate J(q)
+uv.exe run myarm -- velocity --traj square --speed 0.05      # drive CoppeliaSim with a square path
 ```
 
 ### CLI Overview
@@ -39,6 +40,8 @@ All tooling is exposed through `uv(.exe) run myarm -- <group> <command>`. Key gr
 - `verify` – CoppeliaSim validation utilities
   - `fk`        Compare symbolic FK against the simulator using presets, `--q`, or `--csv` joint sets. Tolerances configurable via `--tol-pos` (m) and `--tol-rot` (deg).
   - `ik`        Capture the live simulator pose, solve IK, and optionally `--apply` the best solution back to CoppeliaSim. Control tolerances with `--tol-pos-mm` and `--tol-rot-deg`.
+- `velocity` – Jacobian-based velocity-control demos (requires CoppeliaSim)
+  - Supports `--traj square|circle|cone`, linear `--speed` (m/s), cone `--ang-speed` (rad/s), `--duration`, `--dt`, `--center x y z` (m), and drawing toggles `--draw/--no-draw`.
 
 Run `uv(.exe) run myarm -- <group> <command> --help` for detailed arguments.
 
@@ -83,7 +86,9 @@ When `beta = ±π/2`, the CLI switches to a gimbal-lock-safe reconstruction by c
 - `src/myarm/numerical_checker.py`     Numeric XY'Z' reconstruction checks
 - `src/myarm/presets.py`               Joint angle presets (degrees)
 - `src/myarm/main.py`                  Unified CLI entry point (`myarm`)
+- `src/myarm/velocity_control.py`      Velocity-control trajectories and CLI glue
 - `scripts/verify_cases.py`            Batch verification script for canned IK/FK scenarios
+- `scripts/velocity_control.py`        Legacy wrapper; now invokes the `velocity` CLI group
 - `report/`                            Experiment logs and notes (`lab3-fk/`, `lab3-ik/`)
 - `typings/`                           Third-party `.pyi` stubs (added to `mypy_path`)
 

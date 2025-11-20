@@ -46,6 +46,7 @@ from myarm.jacobian import (
 )
 from myarm.verify_fk_coppelia import configure_verify_fk_parser, run_verify_fk
 from myarm.verify_ik_coppelia import configure_verify_ik_parser, run_verify_ik
+from myarm.velocity_control import configure_velocity_parser, run_velocity_control
 
 if TYPE_CHECKING:
     import numpy as np
@@ -295,6 +296,10 @@ def cmd_verify_ik(args: argparse.Namespace) -> int:
     return run_verify_ik(args)
 
 
+def cmd_velocity(args: argparse.Namespace) -> int:
+    return run_velocity_control(args)
+
+
 def cmd_ik_euler(args: argparse.Namespace) -> int:
     if len(args.target) != 6:
         raise SystemExit("--target expects 6 values: x y z alpha beta gamma")
@@ -447,6 +452,10 @@ def build_parser() -> argparse.ArgumentParser:
     verify_ik = verify_sub.add_parser("ik", help="verify IK using CoppeliaSim")
     configure_verify_ik_parser(verify_ik)
     verify_ik.set_defaults(func=cmd_verify_ik)
+
+    velocity = sub.add_parser("velocity", help="Jacobian velocity-control demos (requires CoppeliaSim)")
+    configure_velocity_parser(velocity)
+    velocity.set_defaults(func=cmd_velocity)
 
     return parser
 
