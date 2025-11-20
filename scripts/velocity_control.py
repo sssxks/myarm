@@ -153,13 +153,16 @@ def init_from_pose(sim, joints: list[int], pos_mm: Vector3, rot: Matrix33) -> np
 def control_loop(
     sim,
     joints: list[int],
+    tip: int | None,
     traj_fn: Callable[[float], TrajState],
     gains: ControlGains,
     duration: float,
     dt: float,
+    draw_handle: int | None = None,
 ) -> None:
     t0 = time.time()
     last = t0
+    last_draw_pt: list[float] | None = None
     while True:
         now = time.time()
         t = now - t0
@@ -190,6 +193,12 @@ def control_loop(
         for h, v in zip(joints, dq):
             sim.setJointTargetVelocity(h, float(v))
 
+        if draw_handle is not None and tip is not None:
+            pt = sim.getObjectPosition(tip, -1)  # meters
+            if last_draw_pt is not None:
+                sim.addDrawingObjectItem(draw_handle, last_draw_pt + pt)
+            last_draw_pt = pt
+
     for h in joints:
         sim.setJointTargetVelocity(h, 0.0)
 
@@ -207,7 +216,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=PORT)
     p.add_argument("--cone-angle", type=float, default=60.0, help="apex angle (deg)")
     p.add_argument("--center", type=float, nargs=3, default=[0.300, 0.000, 0.300], help="center/apex in meters")
+    p.add_argument("--draw", action="store_true", help="enable path rendering in CoppeliaSim")
+    p.add_argument("--draw-max", type=int, default=2000, help="max drawing segments to keep (cyclic)")
     return p
+
+
+def _stop_robot(sim, joints: list[int]) -> None:
+    """Safely zero velocities."""
+    for h in joints:
+        sim.setJointTargetVelocity(h, 0.0)
 
 
 def main() -> None:
@@ -216,7 +233,7 @@ def main() -> None:
 
     _, sim = connect_coppelia(args.host, args.port)
     joints = [get_object_handle(sim, name) for name in DEFAULT_JOINT_NAMES]
-    _ = get_object_handle(sim, DEFAULT_TIP_NAME)
+    tip = get_object_handle(sim, DEFAULT_TIP_NAME)
 
     if args.traj == "square":
         side_mm = args.side * 1000.0
@@ -231,9 +248,21 @@ def main() -> None:
     init_state = traj_fn(0.0)
     init_from_pose(sim, joints, init_state.pos_mm, init_state.rot_des)
 
+    draw_handle = None
+    if args.draw:
+        opts = sim.drawing_linestrip + sim.drawing_cyclic
+        draw_handle = sim.addDrawingObject(opts, 3, 0.0, -1, args.draw_max, [1.0, 0.0, 0.0])
+
     gains = ControlGains()
     print(f"Running {args.traj} trajectory for {args.duration}s ...")
-    control_loop(sim, joints, traj_fn, gains, args.duration, args.dt)
+    try:
+        control_loop(sim, joints, tip, traj_fn, gains, args.duration, args.dt, draw_handle)
+    except KeyboardInterrupt:
+        print("Interrupted, stopping ...")
+    finally:
+        _stop_robot(sim, joints)
+        if draw_handle is not None:
+            sim.removeDrawingObject(draw_handle)
     print("Done.")
 
 
