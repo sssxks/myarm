@@ -11,7 +11,7 @@
 - `dist/` — build artifacts (do not commit). See `.gitignore`.
 
 ## Build, Test, and Development Commands
-- if you are in WSL, use `uv.exe` instead of `uv` to run the windows cli, otherwise `.venv` will be recreated for wsl.
+- you may or may not in wsl, so prefer `uv.exe` to `uv` to run in windows environment.
 - `uv.exe sync` — create/update the environment from `pyproject.toml`/`uv.lock`.
 - `uv.exe run myarm -- fk symbolic|eval|random|dh` — FK tooling.
 - `uv.exe run myarm -- ik solve|euler` — IK solvers.
