@@ -39,15 +39,17 @@ def _build_ik_options(args: argparse.Namespace) -> IKOptions:
 
 
 def _collect_seeds(args: argparse.Namespace, deg: bool) -> list[JointAngles]:
-    seeds: list[JointAngles] = []
     rows = getattr(args, "seed", None)
-    if rows:
-        for row in rows:
-            if len(row) != 6:
-                raise SystemExit("--seed expects 6 values per entry")
-            converted = [radians(v) for v in row] if deg else [float(v) for v in row]
-            seeds.append(JointAngles(tuple(converted)))
-    return seeds
+    if not rows:
+        return []
+
+    if any(len(row) != 6 for row in rows):
+        raise SystemExit("--seed expects 6 values per entry")
+
+    if deg:
+        return [JointAngles(tuple(radians(v) for v in row)) for row in rows]
+    else:
+        return [JointAngles(tuple(float(v) for v in row)) for row in rows]
 
 
 def _matrix16_to_np(vals: Sequence[float]) -> np.ndarray:
@@ -64,6 +66,11 @@ def _build_target_from_q(q: Sequence[float], deg: bool) -> np.ndarray:
     return fk_numeric(qrad)
 
 
+def _solve_ik(T_des, options, seeds):
+    seed_values = [seed.as_list() for seed in seeds]
+    return solve_ik(T_des, seeds=seed_values or None, opts=options)
+
+
 def cmd_ik_solve(args: argparse.Namespace) -> int:
     if args.T is not None:
         T_des = _matrix16_to_np(args.T)
@@ -74,8 +81,8 @@ def cmd_ik_solve(args: argparse.Namespace) -> int:
 
     options = _build_ik_options(args)
     seeds = _collect_seeds(args, args.deg)
-    seed_values = [seed.as_list() for seed in seeds]
-    results = solve_ik(T_des, seeds=seed_values or None, opts=options)
+    results = _solve_ik(T_des, options, seeds)
+
     if not results:
         print("No solution found. Try adjusting seeds or tolerances.")
         return 1
@@ -84,7 +91,7 @@ def cmd_ik_solve(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_ik_euler(args: argparse.Namespace) -> int:
+def _build_target_from_euler(args):
     if len(args.target) != 6:
         raise SystemExit("--target expects 6 values: x y z alpha beta gamma")
 
@@ -103,19 +110,34 @@ def cmd_ik_euler(args: argparse.Namespace) -> int:
     else:
         alpha_r, beta_r, gamma_r = (alpha, beta, gamma)
 
-    T_des = pose_from_xyz_euler(x_mm, y_mm, z_mm, alpha_r, beta_r, gamma_r)
+    return pose_from_xyz_euler(x_mm, y_mm, z_mm, alpha_r, beta_r, gamma_r)
+
+
+def _solve_ik_from_euler(args, T_des):
     options = _build_ik_options(args)
     seeds = _collect_seeds(args, args.deg)
-    seed_values = [seed.as_list() for seed in seeds]
-    results = solve_ik(T_des, seeds=seed_values or None, opts=options)
+    return _solve_ik(T_des, options, seeds)
+
+
+def cmd_ik_euler(args: argparse.Namespace) -> int:
+    T_des = _build_target_from_euler(args)
+    results = _solve_ik_from_euler(args, T_des)
+
     if not results:
         print("No solution found. Try adjusting seeds or tolerances.")
         return 1
-    limit = int(args.limit)
 
-    xyz_mm = [round(v, 3) for v in (x_mm, y_mm, z_mm)]
+    x, y, z, alpha, beta, gamma = (float(v) for v in args.target)
+    if args.deg:
+        alpha_r, beta_r, gamma_r = (radians(alpha), radians(beta), radians(gamma))
+    else:
+        alpha_r, beta_r, gamma_r = (alpha, beta, gamma)
+        
+    limit = int(args.limit)
+    xyz_mm = [round(v, 3) for v in (x*1000, y*1000, z*1000) if args.pos_unit == 'm' else (x, y, z)]
     euler_rad = [round(v, 6) for v in (alpha_r, beta_r, gamma_r)]
     euler_deg = [round(degrees(v), 3) for v in (alpha_r, beta_r, gamma_r)]
+
     print(f"Target XYZ (mm): {xyz_mm}")
     print("Euler (rad):", euler_rad)
     print("Euler (deg):", euler_deg)

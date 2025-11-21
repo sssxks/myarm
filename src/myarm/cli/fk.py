@@ -21,6 +21,16 @@ def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
     return [list(row) for row in q_list]
 
 
+def _generate_symbolic_matrices(a, alpha, d, theta, rest, evaluate):
+    matrices = [
+        fk_standard(a[: i + 1], alpha[: i + 1], d[: i + 1], theta[: i + 1])
+        for i in range(6)
+    ]
+    if evaluate:
+        return [sp.N(T.subs(rest), 6) for T in matrices]
+    return matrices
+
+
 def cmd_fk_symbolic(args: argparse.Namespace) -> int:
     T06, th_syms, params = demo_standard_6R()
     a = params["a"]
@@ -31,11 +41,10 @@ def cmd_fk_symbolic(args: argparse.Namespace) -> int:
     if args.steps:
         print("Stepwise Ti (evaluated at rest unless --no-eval):")
         rest = {s: 0.0 for s in th_syms}
-        for i in range(6):
-            Ti = fk_standard(a[: i + 1], alpha[: i + 1], d[: i + 1], theta[: i + 1])
-            Mi = sp.N(Ti.subs(rest), 6) if args.eval else Ti  # type: ignore[no-untyped-call]
+        matrices = _generate_symbolic_matrices(a, alpha, d, theta, rest, args.eval)
+        for i, T in enumerate(matrices):
             print(f"\nT0{i + 1}:")
-            pprint_matrix(Mi)
+            pprint_matrix(T)
         return 0
 
     print("Symbolic T06:")
@@ -54,6 +63,14 @@ def cmd_fk_symbolic(args: argparse.Namespace) -> int:
     return 0
 
 
+def _evaluate_fk(T06, th_syms, qs):
+    def _calculate(row):
+        T_num = sp.N(T06.subs({s: float(v) for s, v in zip(th_syms, row)}), 15)
+        return T_num, T_to_euler_xy_dash_z(T_num, safe=True)
+
+    return [_calculate(row) for row in qs]
+
+
 def cmd_fk_eval(args: argparse.Namespace) -> int:
     T06, th_syms, _ = demo_standard_6R()
 
@@ -69,37 +86,40 @@ def cmd_fk_eval(args: argparse.Namespace) -> int:
     if not qs:
         raise SystemExit("Provide --preset or --q …")
 
-    for i, row in enumerate(qs, 1):
-        subs = {s: float(v) for s, v in zip(th_syms, row)}
-        T_num = sp.N(T06.subs(subs), 15)  # type: ignore[no-untyped-call]
+    results = _evaluate_fk(T06, th_syms, qs)
+
+    for i, (T_num, (a, b, g)) in enumerate(results, 1):
         print(f"\nCase {i}:")
         pprint_matrix(T_num)
-        a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
         print("XY'Z' (rad):", float(a), float(b), float(g))
         print("XY'Z' (deg):", degrees(float(a)), degrees(float(b)), degrees(float(g)))
     return 0
 
 
+def _generate_random_fk(T06, th_syms, rng):
+    while True:
+        vals = [rng.uniform(-math.pi, math.pi) for _ in th_syms]
+        subs = {s: v for s, v in zip(th_syms, vals)}
+        T_num = sp.N(T06.subs(subs), 15)
+        a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
+        if abs(math.cos(float(b))) < 1e-6:
+            continue
+        yield check_numeric_once(T06, subs)
+
+
 def cmd_fk_random(args: argparse.Namespace) -> int:
     T06, th_syms, _ = demo_standard_6R()
     rng = random.Random(args.seed)
-    n = int(args.count)
-    printed = 0
-    while printed < n:
-        vals = [rng.uniform(-math.pi, math.pi) for _ in th_syms]
-        subs = {s: v for s, v in zip(th_syms, vals)}
-        T_num = sp.N(T06.subs(subs), 15)  # type: ignore[no-untyped-call]
-        a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
-        if abs(math.cos(float(b))) < 1e-6:
-            continue  # skip near gimbal lock
-        print(f"\nSample {printed + 1}:")
-        result = check_numeric_once(T06, subs)
+    
+    from itertools import islice
+
+    for i, result in enumerate(islice(_generate_random_fk(T06, th_syms, rng), args.count)):
+        print(f"\nSample {i + 1}:")
         print("XY'Z' (rad):", result.alpha, result.beta, result.gamma)
         print(
             f"||R-Rrec||_F = {result.err_F:.3e},  ||R-Rrec||_inf = {result.err_inf:.3e}"
         )
         sp.pprint(result.delta)  # type: ignore[operator]
-        printed += 1
     return 0
 
 

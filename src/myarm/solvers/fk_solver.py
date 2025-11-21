@@ -11,7 +11,9 @@ Functions:
 
 import math
 from collections.abc import Iterable, Sequence
+from functools import reduce
 from typing import Any, cast
+import operator
 import sympy as sp
 
 from myarm.core.type_utils import Num
@@ -58,12 +60,15 @@ def fk_standard(
     theta: Sequence[Num],
     simplify: bool = True,
 ) -> sp.Matrix:
-    if len(a) != len(alpha) or len(a) != len(d) or len(a) != len(theta):
+    if not (len(a) == len(alpha) == len(d) == len(theta)):
         raise ValueError("a, alpha, d, theta must have the same length")
-    T = cast(sp.Matrix, sp.eye(4))  # type: ignore[no-untyped-call]
-    for ai, al, di, th in zip(a, alpha, d, theta):
-        Ti = Rz(th) * Tz(di) * Tx(ai) * Rx(al)
-        T = T * Ti
+
+    matrices = (
+        Rz(th) * Tz(di) * Tx(ai) * Rx(al)
+        for ai, al, di, th in zip(a, alpha, d, theta)
+    )
+    T = reduce(operator.mul, matrices, sp.eye(4))
+
     return simplify_T(T) if simplify else T
 
 
@@ -179,12 +184,15 @@ def fk_modified(
     theta: Sequence[Num],
     simplify: bool = True,
 ) -> sp.Matrix:
-    if len(a_prev) != len(alpha_prev) or len(a_prev) != len(d) or len(a_prev) != len(theta):
+    if not (len(a_prev) == len(alpha_prev) == len(d) == len(theta)):
         raise ValueError("a_prev, alpha_prev, d, theta must have the same length")
-    T = cast(sp.Matrix, sp.eye(4))  # type: ignore[no-untyped-call]
-    for ap, alp, di, th in zip(a_prev, alpha_prev, d, theta):
-        Ti = Rx(alp) * Tx(ap) * Rz(th) * Tz(di)
-        T = T * Ti
+
+    matrices = (
+        Rx(alp) * Tx(ap) * Rz(th) * Tz(di)
+        for ap, alp, di, th in zip(a_prev, alpha_prev, d, theta)
+    )
+    T = reduce(operator.mul, matrices, sp.eye(4))
+
     return simplify_T(T) if simplify else T
 
 

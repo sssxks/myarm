@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
+from functools import reduce
+import operator
+import itertools
 from typing import NamedTuple, cast
 
 import numpy as np
@@ -86,8 +89,8 @@ def _angle_delta(
 ) -> np.ndarray:
     """Return elementwise wrapped angle difference a-b (rad)."""
     diff = np.asarray(a, dtype=float) - np.asarray(b, dtype=float)
-    wrapped = [_wrap_to_pi(float(v)) for v in diff]
-    return np.array(wrapped, dtype=float)
+    wrapped = np.array([_wrap_to_pi(v) for v in diff], dtype=float)
+    return wrapped
 
 
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
@@ -104,31 +107,36 @@ def fk_numeric(q: Sequence[float] | np.ndarray) -> Matrix44:
     if len(q) != 6:
         raise ValueError("q must have length 6")
     th = np.asarray(q, dtype=float) + dh_num.theta_offset
-    T = np.eye(4, dtype=float)
-    for i in range(6):
-        T = T @ dh_T(
+    
+    matrices = (
+        dh_T(
             float(dh_num.a[i]),
             float(dh_num.alpha[i]),
             float(dh_num.d[i]),
             float(th[i]),
         )
-    return T
+        for i in range(6)
+    )
+    
+    return reduce(operator.mul, matrices, np.eye(4, dtype=float))
 
 
 def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[Matrix44]:
     """Return [T00, T01, …, T06] for current q."""
     th = np.asarray(q, dtype=float) + dh_num.theta_offset
-    Ts: list[Matrix44] = [cast(Matrix44, np.eye(4, dtype=float))]
-    T = np.eye(4, dtype=float)
-    for i in range(6):
-        T = T @ dh_T(
+    
+    matrices = [
+        dh_T(
             float(dh_num.a[i]),
             float(dh_num.alpha[i]),
             float(dh_num.d[i]),
             float(th[i]),
         )
-        Ts.append(cast(Matrix44, T))
-    return Ts
+        for i in range(6)
+    ]
+    
+    Ts = list(itertools.accumulate(matrices, operator.mul, initial=np.eye(4, dtype=float)))
+    return cast(list[Matrix44], Ts)
 
 
 def geometric_jacobian(q: Sequence[float] | np.ndarray) -> NDArray[np.float64]:
@@ -300,30 +308,30 @@ def solve_ik(
             seed_arr = np.asarray(seed, dtype=float)
             seed_list.append(seed_arr)
     else:
-        seed_list.append(_seed_from_pose(T_des))
-        seed_list.append(np.zeros(6, dtype=float))
-        seed_list.append(np.array([math.pi / 2, 0, 0, 0, 0, 0], dtype=float))
-        seed_list.append(np.array([-math.pi / 2, 0, 0, 0, 0, 0], dtype=float))
-        seed_list.append(np.array([0, math.pi / 3, 0, 0, 0, 0], dtype=float))
-        seed_list.append(np.array([0, -math.pi / 3, 0, 0, 0, 0], dtype=float))
+        seed_list = [
+            _seed_from_pose(T_des),
+            np.zeros(6, dtype=float),
+            np.array([math.pi / 2, 0, 0, 0, 0, 0], dtype=float),
+            np.array([-math.pi / 2, 0, 0, 0, 0, 0], dtype=float),
+            np.array([0, math.pi / 3, 0, 0, 0, 0], dtype=float),
+            np.array([0, -math.pi / 3, 0, 0, 0, 0], dtype=float),
+        ]
 
-    results: list[tuple[np.ndarray, float, float, int]] = []
     tried: list[np.ndarray] = []
+    unique_seeds = []
     for s_arr in seed_list:
-        # Avoid re-trying very similar seeds
-        if tried and any(float(np.max(np.abs(_angle_delta(s_arr, t)))) < 1e-3 for t in tried):
-            continue
-        tried.append(s_arr)
-        q, pe, re, it = _ik_once_dls(T_des, s_arr, opts)
-        results.append((q, pe, re, it))
+        if not tried or not any(float(np.max(np.abs(_angle_delta(s_arr, t)))) < 1e-3 for t in tried):
+            unique_seeds.append(s_arr)
+            tried.append(s_arr)
 
-    # Keep converged (within tolerance) first; still return best few otherwise
+    results = [_ik_once_dls(T_des, s_arr, opts) for s_arr in unique_seeds]
+
     converged = [r for r in results if r[1] <= opts.tol_pos and r[2] <= opts.tol_rot]
+
     if not converged:
-        # Sort all by a lexicographic key (pos first then rot)
         results.sort(key=lambda r: (r[1], r[2]))
-        # Deduplicate and return top 1–3 even if not within tol
         uni_q = unique_solutions([r[0] for r in results])
+        
         best = []
         for u in uni_q[:3]:
             for r in results:
@@ -332,14 +340,15 @@ def solve_ik(
                     break
         return best
 
-    # Deduplicate converged solutions and sort by errors
     uni_q = unique_solutions([r[0] for r in converged])
-    out: list[tuple[np.ndarray, float, float, int]] = []
+    
+    out = []
     for u in uni_q:
         for r in converged:
             if np.allclose(r[0], u, atol=1e-3, rtol=0.0):
                 out.append(r)
                 break
+                
     out.sort(key=lambda r: (r[1], r[2], r[3]))
     return out
 

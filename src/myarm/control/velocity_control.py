@@ -33,6 +33,42 @@ class ControlGains:
     qdot_clip: float = 2.0  # rad/s
 
 
+def _calculate_error(
+    T_cur: NDArray[np.float64], state: TrajState
+) -> tuple[Vector3, Vector3]:
+    """Calculates the position and rotation error."""
+    p_cur = T_cur[:3, 3]
+    R_cur = T_cur[:3, :3]
+    e_pos = state.pos_mm - p_cur
+    e_rot = rotation_error_vee(R_cur, state.rot_des)
+    return e_pos, e_rot
+
+
+def _calculate_command(
+    e_pos: Vector3, e_rot: Vector3, state: TrajState, gains: ControlGains
+) -> NDArray[np.float64]:
+    """Calculates the velocity and angular velocity command."""
+    v_cmd = state.vel_mm_s + gains.kp_pos * e_pos
+    w_cmd = state.omega_rad_s + gains.kp_rot * e_rot
+    return np.hstack((v_cmd, w_cmd))
+
+
+def _draw_trace(
+    sim, draw_handle: int, tip: int, last_draw_pt: list[float] | None
+) -> list[float]:
+    """Draws a trace of the tip position."""
+    pt = sim.getObjectPosition(tip, -1)
+    if last_draw_pt is not None:
+        sim.addDrawingObjectItem(draw_handle, last_draw_pt + pt)
+    return pt
+
+
+def _set_joint_velocities(sim, joints: list[int], dq: NDArray[np.float64]) -> None:
+    """Sets the joint velocities in the simulator."""
+    for h, v in zip(joints, dq):
+        sim.setJointTargetVelocity(h, float(v))
+
+
 def control_loop(
     sim,
     joints: list[int],
@@ -60,28 +96,18 @@ def control_loop(
         state = traj_fn(t)
         q = np.array(get_joint_positions(sim, joints), dtype=float)
         T_cur = fk_numeric(q)
-        p_cur = T_cur[:3, 3]
-        R_cur = T_cur[:3, :3]
 
-        e_pos = state.pos_mm - p_cur
-        e_rot = rotation_error_vee(R_cur, state.rot_des)
-
-        v_cmd = state.vel_mm_s + gains.kp_pos * e_pos
-        w_cmd = state.omega_rad_s + gains.kp_rot * e_rot
-        twist = np.hstack((v_cmd, w_cmd))
+        e_pos, e_rot = _calculate_error(T_cur, state)
+        twist = _calculate_command(e_pos, e_rot, state, gains)
 
         J = geometric_jacobian(q)
         dq = damped_pinv_step(J, twist, gains.lambda_dls)
         dq = clip_joint_velocities(dq, gains.qdot_clip)
 
-        for h, v in zip(joints, dq):
-            sim.setJointTargetVelocity(h, float(v))
+        _set_joint_velocities(sim, joints, dq)
 
         if draw_handle is not None and tip is not None:
-            pt = sim.getObjectPosition(tip, -1)  # meters
-            if last_draw_pt is not None:
-                sim.addDrawingObjectItem(draw_handle, last_draw_pt + pt)
-            last_draw_pt = pt
+            last_draw_pt = _draw_trace(sim, draw_handle, tip, last_draw_pt)
 
     for h in joints:
         sim.setJointTargetVelocity(h, 0.0)

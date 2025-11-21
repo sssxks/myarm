@@ -15,6 +15,14 @@ Matrix = NDArray[np.float64]
 __all__ = ["damped_pinv_step", "clip_joint_velocities"]
 
 
+def _svd_pinv_step(J: Matrix, twist: Vector, lam_eff: float) -> Vector:
+    """SVD-based pseudo-inverse fallback."""
+    U, S, Vt = np.linalg.svd(J)
+    damped = S / (S**2 + lam_eff**2)
+    dq = Vt.T @ (damped * (U.T @ twist))
+    return dq
+
+
 def damped_pinv_step(J: Matrix, twist: Vector, lam: float) -> Vector:
     """Map task-space twist to joint velocities using damped least squares.
 
@@ -34,9 +42,7 @@ def damped_pinv_step(J: Matrix, twist: Vector, lam: float) -> Vector:
     try:
         dq = JT @ np.linalg.solve(JJt, twist)
     except np.linalg.LinAlgError:
-        U, S, Vt = np.linalg.svd(J)
-        damped = S / (S**2 + lam_eff**2)
-        dq = Vt.T @ (damped * (U.T @ twist))
+        dq = _svd_pinv_step(J, twist, lam_eff)
     return dq
 
 
