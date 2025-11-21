@@ -201,60 +201,58 @@ class IKOptions(NamedTuple):
     step_clip: float = 0.5    # max |Δq| per iter (rad)
 
 
+def _ik_dls_step(
+    q: np.ndarray,
+    it: int,
+    T_des: np.ndarray,
+    opts: IKOptions,
+    _fk: callable,
+    _jacobian: callable,
+) -> tuple[np.ndarray, float, float, int]:
+    """Recursive step for the DLS IK solver."""
+    T = _fk(q)
+    p_cur, R_cur = T[:3, 3], T[:3, :3]
+    p_des, R_des = T_des[:3, 3], T_des[:3, :3]
+
+    e_pos = p_des - p_cur
+    e_rot = rotation_error_vee(R_cur, R_des)
+    pos_err, rot_err = float(np.linalg.norm(e_pos)), rotation_angle(R_cur, R_des)
+
+    if pos_err <= opts.tol_pos and rot_err <= opts.tol_rot or it >= opts.max_iter:
+        return q, pos_err, rot_err, it
+
+    J = _jacobian(q)
+    W = np.diag([opts.w_pos] * 3 + [opts.w_rot] * 3)
+    e = np.hstack((e_pos, e_rot))
+    JW = W @ J
+    eW = W @ e
+
+    JT = JW.T
+    H = JT @ JW + (opts.lambda_dls ** 2) * np.eye(6)
+    g = JT @ eW
+    try:
+        dq = np.linalg.solve(H, g)
+    except np.linalg.LinAlgError:
+        dq = np.linalg.lstsq(H, g, rcond=None)[0]
+
+    maxabs = float(np.max(np.abs(dq)))
+    if maxabs > opts.step_clip:
+        dq = dq * (opts.step_clip / maxabs)
+
+    q_next = np.array([_wrap_to_pi(v) for v in (q + dq)], dtype=float)
+    return _ik_dls_step(q_next, it + 1, T_des, opts, _fk, _jacobian)
+
+
 def _ik_once_dls(
     T_des: np.ndarray, q0: Sequence[float] | np.ndarray, opts: IKOptions, dh_params: DHParamsNum
 ) -> tuple[np.ndarray, float, float, int]:
     """Run one DLS solve from seed q0. Returns (q, pos_err, rot_err, iters)."""
-    q = np.asarray(q0, dtype=float).copy()
-    q = np.array([_wrap_to_pi(float(v)) for v in q], dtype=float)
+    q_initial = np.array([_wrap_to_pi(float(v)) for v in q0], dtype=float)
 
     _fk_numeric = partial(fk_numeric, dh_params=dh_params)
     _geometric_jacobian = partial(geometric_jacobian, dh_params=dh_params)
 
-    for it in range(1, opts.max_iter + 1):
-        T = _fk_numeric(q)
-        p_cur = T[:3, 3]
-        R_cur = T[:3, :3]
-        p_des = T_des[:3, 3]
-        R_des = T_des[:3, :3]
-
-        e_pos = p_des - p_cur
-        e_rot = rotation_error_vee(R_cur, R_des)
-        pos_err = float(np.linalg.norm(e_pos))
-        rot_err = rotation_angle(R_cur, R_des)
-        if pos_err <= opts.tol_pos and rot_err <= opts.tol_rot:
-            return q, pos_err, rot_err, it
-
-        J = _geometric_jacobian(q)
-        # Weighted task: W * e where W=diag(w_pos,w_pos,w_pos,w_rot,w_rot,w_rot)
-        W = np.diag([opts.w_pos] * 3 + [opts.w_rot] * 3)
-        e = np.hstack((e_pos, e_rot))
-        JW = W @ J
-        eW = W @ e
-
-        # Damped least squares: Δq = (JW^T JW + λ^2 I)^-1 JW^T eW
-        JT = JW.T
-        H = JT @ JW
-        H += (opts.lambda_dls ** 2) * np.eye(6)
-        g = JT @ eW
-        try:
-            dq = np.linalg.solve(H, g)
-        except np.linalg.LinAlgError:
-            dq = np.linalg.lstsq(H, g, rcond=None)[0]
-
-        # Clip step to avoid large jumps
-        maxabs = float(np.max(np.abs(dq)))
-        if maxabs > opts.step_clip:
-            dq = dq * (opts.step_clip / maxabs)
-
-        q = q + dq
-        q = np.array([_wrap_to_pi(float(v)) for v in q], dtype=float)
-
-    # Return last iterate if not converged
-    T = _fk_numeric(q)
-    pos_err = float(np.linalg.norm(T[:3, 3] - T_des[:3, 3]))
-    rot_err = rotation_angle(T[:3, :3], T_des[:3, :3])
-    return q, pos_err, rot_err, opts.max_iter
+    return _ik_dls_step(q_initial, 1, T_des, opts, _fk_numeric, _geometric_jacobian)
 
 
 def _seed_from_pose(T_des: np.ndarray) -> np.ndarray:
