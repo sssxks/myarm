@@ -20,9 +20,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from functools import reduce, partial
-import operator
-import itertools
+from functools import partial
 from typing import NamedTuple, cast
 
 import numpy as np
@@ -30,39 +28,15 @@ from numpy.typing import NDArray
 
 from myarm.core.orientation import rotation_xy_dash_z_numeric
 from myarm.model.dh_params import DHParamsNum, demo_standard_6R_num
+from myarm.model.jacobian import (
+    forward_chain_numeric,
+    geometric_jacobian_numeric,
+)
 
 
 Matrix44 = NDArray[np.float64]
 Matrix33 = NDArray[np.float64]
 Vector3 = NDArray[np.float64]
-
-# ---- Small numeric helpers ----
-def _rotz(theta: float) -> Matrix44:
-    c, s = math.cos(theta), math.sin(theta)
-    M = np.eye(4, dtype=float)
-    M[0, 0], M[0, 1] = c, -s
-    M[1, 0], M[1, 1] = s, c
-    return cast(Matrix44, M)
-
-
-def _rotx(alpha: float) -> Matrix44:
-    c, s = math.cos(alpha), math.sin(alpha)
-    M = np.eye(4, dtype=float)
-    M[1, 1], M[1, 2] = c, -s
-    M[2, 1], M[2, 2] = s, c
-    return cast(Matrix44, M)
-
-
-def _tz(d: float) -> Matrix44:
-    M = np.eye(4, dtype=float)
-    M[2, 3] = d
-    return cast(Matrix44, M)
-
-
-def _tx(a: float) -> Matrix44:
-    M = np.eye(4, dtype=float)
-    M[0, 3] = a
-    return cast(Matrix44, M)
 
 
 def pose_from_xyz_euler(
@@ -92,11 +66,6 @@ def _angle_delta(
 
 
 # ---- Forward kinematics (fast numeric, consistent with solver.py) ----
-def dh_T(a: float, alpha: float, d: float, theta: float) -> Matrix44:
-    """Standard DH: Rz(theta) Tz(d) Tx(a) Rx(alpha)."""
-    return _rotz(theta) @ _tz(d) @ _tx(a) @ _rotx(alpha)
-
-
 def fk_numeric(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> Matrix44:
     """Compute T06 (4x4) numerically from joint angles q (rad).
 
@@ -104,37 +73,14 @@ def fk_numeric(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> Matri
     """
     if len(q) != 6:
         raise ValueError("q must have length 6")
-    th = np.asarray(q, dtype=float) + dh_params.theta_offset
-    
-    matrices = (
-        dh_T(
-            float(dh_params.a[i]),
-            float(dh_params.alpha[i]),
-            float(dh_params.d[i]),
-            float(th[i]),
-        )
-        for i in range(6)
-    )
-    
-    return reduce(operator.mul, matrices, np.eye(4, dtype=float))
+    chain = forward_chain_numeric(dh_params, q)
+    return cast(Matrix44, chain[-1])
 
 
 def transforms_0_to_i(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> list[Matrix44]:
-    """Return [T00, T01, …, T06] for current q."""
-    th = np.asarray(q, dtype=float) + dh_params.theta_offset
-    
-    matrices = [
-        dh_T(
-            float(dh_params.a[i]),
-            float(dh_params.alpha[i]),
-            float(dh_params.d[i]),
-            float(th[i]),
-        )
-        for i in range(6)
-    ]
-    
-    Ts = list(itertools.accumulate(matrices, operator.mul, initial=np.eye(4, dtype=float)))
-    return cast(list[Matrix44], Ts)
+    """Return [T00, T01, ., T06] for current q."""
+    chain = forward_chain_numeric(dh_params, q)
+    return cast(list[Matrix44], chain)
 
 
 def geometric_jacobian(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> NDArray[np.float64]:
@@ -146,16 +92,7 @@ def geometric_jacobian(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) 
         Jv_i = z × (o_6 - o)
         Jw_i = z
     """
-    Ts = transforms_0_to_i(q, dh_params)
-    o_n = Ts[6][:3, 3]
-    J = np.zeros((6, 6), dtype=float)
-    for i in range(6):
-        Ti = Ts[i]
-        z = Ti[:3, 2]
-        o = Ti[:3, 3]
-        J[:3, i] = np.cross(z, o_n - o)
-        J[3:, i] = z
-    return J
+    return geometric_jacobian_numeric(q, dh=dh_params)
 
 
 def rotation_error_vee(R_cur: Matrix33, R_des: Matrix33) -> Vector3:
@@ -297,7 +234,7 @@ def solve_ik(
         opts = IKOptions()
     if T_des.shape != (4, 4):
         raise ValueError("T_des must be 4x4")
-    
+
     dh_params = demo_standard_6R_num()
 
     # Default seed set: crude pose‑based + a few canonical postures
@@ -332,7 +269,7 @@ def solve_ik(
     if not converged:
         results.sort(key=lambda r: (r[1], r[2]))
         uni_q = unique_solutions([r[0] for r in results])
-        
+
         best = []
         for u in uni_q[:3]:
             for r in results:
@@ -342,14 +279,14 @@ def solve_ik(
         return best
 
     uni_q = unique_solutions([r[0] for r in converged])
-    
+
     out = []
     for u in uni_q:
         for r in converged:
             if np.allclose(r[0], u, atol=1e-3, rtol=0.0):
                 out.append(r)
                 break
-                
+
     out.sort(key=lambda r: (r[1], r[2], r[3]))
     return out
 

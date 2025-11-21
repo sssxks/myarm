@@ -15,6 +15,7 @@ from myarm.solvers.fk_solver import Rx, Tx, Tz, Rz
 
 
 type Matrix6x6 = NDArray[np.float64]
+type Matrix44 = NDArray[np.float64]
 
 
 class JacobianSymbolic(NamedTuple):
@@ -104,11 +105,23 @@ def _forward_chain_numeric(dh: DHParamsNum, joint_angles: Sequence[float]) -> li
     return chain
 
 
-def evaluate_numeric_geometric_jacobian(
+def dh_transform_numeric(a: float, alpha: float, d: float, theta: float) -> Matrix44:
+    """Standard DH transform Rz(theta) Tz(d) Tx(a) Rx(alpha) as 4x4 numpy array."""
+
+    return _numeric_transform(a, alpha, d, theta)
+
+
+def forward_chain_numeric(dh: DHParamsNum, joint_angles: Sequence[float]) -> list[Matrix44]:
+    """Return the base-to-link transforms (including base) for numeric DH params."""
+
+    return _forward_chain_numeric(dh, joint_angles)
+
+
+def geometric_jacobian_numeric(
     joint_angles: Sequence[float],
     dh: DHParamsNum | None = None,
 ) -> Matrix6x6:
-    """Evaluate the 6x6 geometric Jacobian at a specific joint configuration."""
+    """Compute the 6x6 geometric Jacobian numerically for a given configuration."""
 
     params = dh if dh is not None else demo_standard_6R_num()
     chain = _forward_chain_numeric(params, joint_angles)
@@ -127,8 +140,20 @@ def evaluate_numeric_geometric_jacobian(
     return np.vstack((Jv, Jw))
 
 
+def evaluate_numeric_geometric_jacobian(
+    joint_angles: Sequence[float],
+    dh: DHParamsNum | None = None,
+) -> Matrix6x6:
+    """Evaluate the 6x6 geometric Jacobian at a specific joint configuration."""
+
+    return geometric_jacobian_numeric(joint_angles, dh=dh)
+
+
 __all__ = [
     "JacobianSymbolic",
     "symbolic_geometric_jacobian",
+    "dh_transform_numeric",
+    "forward_chain_numeric",
+    "geometric_jacobian_numeric",
     "evaluate_numeric_geometric_jacobian",
 ]
