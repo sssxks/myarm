@@ -1,6 +1,6 @@
 # myarm Manipulator Toolkit
 
-This project provides symbolic and numeric tooling for a 6‑DoF desktop arm (ZJU‑I) including forward and inverse kinematics, Euler angle helpers, and CoppeliaSim verification hooks. The command-line interface has been consolidated under a single `myarm` entry point.
+This AI-assisted course project provides symbolic and numeric tooling for a 6‑DoF desktop arm (ZJU‑I) including forward and inverse kinematics, Jacobian matricies, and CoppeliaSim verification and control hooks.
 
 ## Quick Start
 
