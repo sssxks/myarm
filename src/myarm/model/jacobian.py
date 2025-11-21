@@ -89,7 +89,9 @@ def _numeric_transform(a: float, alpha: float, d: float, theta: float) -> NDArra
     )
 
 
-def _forward_chain_numeric(dh: DHParamsNum, joint_angles: Sequence[float]) -> list[NDArray[np.float64]]:
+def _forward_chain_numeric(
+    dh: DHParamsNum, joint_angles: Sequence[float] | np.ndarray
+) -> list[NDArray[np.float64]]:
     theta = np.asarray(joint_angles, dtype=float)
     if theta.shape != (dh.theta_offset.shape[0],):
         msg = f"Expected {dh.theta_offset.shape[0]} joint angles, received {theta.shape[0]}"
@@ -111,14 +113,14 @@ def dh_transform_numeric(a: float, alpha: float, d: float, theta: float) -> Matr
     return _numeric_transform(a, alpha, d, theta)
 
 
-def forward_chain_numeric(dh: DHParamsNum, joint_angles: Sequence[float]) -> list[Matrix44]:
+def forward_chain_numeric(dh: DHParamsNum, joint_angles: Sequence[float] | np.ndarray) -> list[Matrix44]:
     """Return the base-to-link transforms (including base) for numeric DH params."""
 
     return _forward_chain_numeric(dh, joint_angles)
 
 
 def geometric_jacobian_numeric(
-    joint_angles: Sequence[float],
+    joint_angles: Sequence[float] | np.ndarray,
     dh: DHParamsNum | None = None,
 ) -> Matrix6x6:
     """Compute the 6x6 geometric Jacobian numerically for a given configuration."""

@@ -57,7 +57,7 @@ def cmd_jacobian_numeric(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_subparsers(subparsers: argparse._SubParsersAction) -> None:
+def register_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     jacobian = subparsers.add_parser("jacobian", help="geometric Jacobian helpers")
     jac_sub = jacobian.add_subparsers(dest="jacobian_command", required=True)
 

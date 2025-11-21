@@ -5,23 +5,32 @@ from __future__ import annotations
 import argparse
 import math
 import random
+from collections.abc import Iterable, Sequence
 from math import degrees, radians
+from typing import Iterator
 import sympy as sp
 
 from myarm.cli.utils import pprint_matrix
 from myarm.model.dh_params import demo_standard_6R
 from myarm.model.presets import PRESETS_DEG
 from myarm.solvers.fk_solver import T_to_euler_xy_dash_z, fk_standard
-from myarm.solvers.numerical_checker import check_numeric_once
+from myarm.solvers.numerical_checker import NumericCheckResult, check_numeric_once
 
 
-def _parse_qs(q_list: list[list[float]], deg: bool) -> list[list[float]]:
+def _parse_qs(q_list: Sequence[Sequence[float]], deg: bool) -> list[list[float]]:
     if deg:
         return [[radians(entry) for entry in row] for row in q_list]
     return [list(row) for row in q_list]
 
 
-def _generate_symbolic_matrices(a, alpha, d, theta, rest, evaluate):
+def _generate_symbolic_matrices(
+    a: Sequence[sp.Expr | float],
+    alpha: Sequence[sp.Expr | float],
+    d: Sequence[sp.Expr | float],
+    theta: Sequence[sp.Expr | float],
+    rest: dict[sp.Symbol, float],
+    evaluate: bool,
+) -> list[sp.Matrix]:
     matrices = [
         fk_standard(a[: i + 1], alpha[: i + 1], d[: i + 1], theta[: i + 1])
         for i in range(6)
@@ -63,10 +72,13 @@ def cmd_fk_symbolic(args: argparse.Namespace) -> int:
     return 0
 
 
-def _evaluate_fk(T06, th_syms, qs):
-    def _calculate(row):
+def _evaluate_fk(
+    T06: sp.Matrix, th_syms: Sequence[sp.Symbol], qs: Sequence[Sequence[float]]
+) -> list[tuple[sp.Matrix, tuple[float, float, float]]]:
+    def _calculate(row: Sequence[float]) -> tuple[sp.Matrix, tuple[float, float, float]]:
         T_num = sp.N(T06.subs({s: float(v) for s, v in zip(th_syms, row)}), 15)
-        return T_num, T_to_euler_xy_dash_z(T_num, safe=True)
+        a, b, g = T_to_euler_xy_dash_z(T_num, safe=True)
+        return T_num, (float(a), float(b), float(g))
 
     return [_calculate(row) for row in qs]
 
@@ -96,7 +108,7 @@ def cmd_fk_eval(args: argparse.Namespace) -> int:
     return 0
 
 
-def _generate_random_fk(T06, th_syms, rng):
+def _generate_random_fk(T06: sp.Matrix, th_syms: Sequence[sp.Symbol], rng: random.Random) -> Iterator[NumericCheckResult]:
     while True:
         vals = [rng.uniform(-math.pi, math.pi) for _ in th_syms]
         subs = {s: v for s, v in zip(th_syms, vals)}
@@ -132,7 +144,7 @@ def cmd_fk_dh(_args: argparse.Namespace) -> int:
     return 0
 
 
-def register_subparsers(subparsers: argparse._SubParsersAction) -> None:
+def register_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     fk = subparsers.add_parser("fk", help="forward kinematics utilities")
     fk_sub = fk.add_subparsers(dest="fk_command", required=True)
 

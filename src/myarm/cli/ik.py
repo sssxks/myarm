@@ -12,6 +12,7 @@ import sympy as sp
 
 from myarm.cli.utils import pprint_matrix
 from myarm.core.models import JointAngles, PoseTarget
+from myarm.model.dh_params import DHParamsNum, demo_standard_6R_num
 from myarm.solvers.ik_solver import IKOptions, fk_numeric, pose_from_xyz_euler, solve_ik
 
 
@@ -60,14 +61,14 @@ def _matrix16_to_np(vals: Sequence[float]) -> np.ndarray:
     return matrix
 
 
-def _build_target_from_q(q: Sequence[float], deg: bool) -> np.ndarray:
+def _build_target_from_q(q: Sequence[float], deg: bool, dh_params: DHParamsNum) -> np.ndarray:
     if len(q) != 6:
         raise SystemExit("--from-q requires 6 values")
     qrad = [math.radians(v) for v in q] if deg else list(q)
-    return fk_numeric(qrad)
+    return fk_numeric(qrad, dh_params)
 
 
-def _solve_ik(T_des, options, seeds):
+def _solve_ik(T_des: np.ndarray, options: IKOptions, seeds: list[JointAngles]) -> list[tuple[np.ndarray, float, float, int]]:
     seed_values = [seed.as_list() for seed in seeds]
     return solve_ik(T_des, seeds=seed_values or None, opts=options)
 
@@ -76,7 +77,7 @@ def cmd_ik_solve(args: argparse.Namespace) -> int:
     if args.T is not None:
         T_des = _matrix16_to_np(args.T)
     elif args.from_q:
-        T_des = _build_target_from_q(args.from_q, args.deg)
+        T_des = _build_target_from_q(args.from_q, args.deg, demo_standard_6R_num())
     else:
         raise SystemExit("Provide either --T 16vals or --from-q q1..q6")
 
@@ -92,7 +93,7 @@ def cmd_ik_solve(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_target_from_euler(args):
+def _build_target_from_euler(args: argparse.Namespace) -> np.ndarray:
     if len(args.target) != 6:
         raise SystemExit("--target expects 6 values: x y z alpha beta gamma")
 
@@ -114,7 +115,7 @@ def _build_target_from_euler(args):
     return pose_from_xyz_euler(x_mm, y_mm, z_mm, alpha_r, beta_r, gamma_r)
 
 
-def _solve_ik_from_euler(args, T_des):
+def _solve_ik_from_euler(args: argparse.Namespace, T_des: np.ndarray) -> list[tuple[np.ndarray, float, float, int]]:
     options = _build_ik_options(args)
     seeds = _collect_seeds(args, args.deg)
     return _solve_ik(T_des, options, seeds)
@@ -170,7 +171,7 @@ def _add_ik_common_arguments(parser: argparse.ArgumentParser, deg_help: str) -> 
     parser.add_argument("--limit", type=int, default=8, help="print up to N solutions")
 
 
-def register_subparsers(subparsers: argparse._SubParsersAction) -> None:
+def register_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     ik = subparsers.add_parser("ik", help="inverse kinematics helpers")
     ik_sub = ik.add_subparsers(dest="ik_command", required=True)
 

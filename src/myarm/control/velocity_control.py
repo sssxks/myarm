@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -17,6 +18,7 @@ from myarm.adapters.coppelia_utils import get_joint_positions
 from .control_utils import clip_joint_velocities, damped_pinv_step
 from myarm.solvers.ik_solver import IKOptions, fk_numeric, geometric_jacobian, rotation_error_vee
 from myarm.solvers.trajectories import TrajState
+from myarm.model.dh_params import DHParamsNum, demo_standard_6R_num
 
 Vector3 = NDArray[np.float64]
 Matrix33 = NDArray[np.float64]
@@ -54,23 +56,23 @@ def _calculate_command(
 
 
 def _draw_trace(
-    sim, draw_handle: int, tip: int, last_draw_pt: list[float] | None
+    sim: Any, draw_handle: int, tip: int, last_draw_pt: list[float] | None
 ) -> list[float]:
     """Draws a trace of the tip position."""
-    pt = sim.getObjectPosition(tip, -1)
+    pt = [float(v) for v in sim.getObjectPosition(tip, -1)]
     if last_draw_pt is not None:
         sim.addDrawingObjectItem(draw_handle, last_draw_pt + pt)
     return pt
 
 
-def _set_joint_velocities(sim, joints: list[int], dq: NDArray[np.float64]) -> None:
+def _set_joint_velocities(sim: Any, joints: list[int], dq: NDArray[np.float64]) -> None:
     """Sets the joint velocities in the simulator."""
     for h, v in zip(joints, dq):
         sim.setJointTargetVelocity(h, float(v))
 
 
 def control_loop(
-    sim,
+    sim: Any,
     joints: list[int],
     tip: int | None,
     traj_fn: Callable[[float], TrajState],
@@ -78,11 +80,13 @@ def control_loop(
     duration: float,
     dt: float,
     draw_handle: int | None = None,
+    dh_params: DHParamsNum | None = None,
 ) -> None:
     """Core velocity-control loop used by both the CLI and scripts."""
     t0 = time.monotonic()
     next_tick = t0
     last_draw_pt: list[float] | None = None
+    params = dh_params if dh_params is not None else demo_standard_6R_num()
     while True:
         now = time.monotonic()
         t = now - t0
@@ -95,12 +99,12 @@ def control_loop(
 
         state = traj_fn(t)
         q = np.array(get_joint_positions(sim, joints), dtype=float)
-        T_cur = fk_numeric(q)
+        T_cur = fk_numeric(q, params)
 
         e_pos, e_rot = _calculate_error(T_cur, state)
         twist = _calculate_command(e_pos, e_rot, state, gains)
 
-        J = geometric_jacobian(q)
+        J = geometric_jacobian(q, params)
         dq = damped_pinv_step(J, twist, gains.lambda_dls)
         dq = clip_joint_velocities(dq, gains.qdot_clip)
 
@@ -113,14 +117,15 @@ def control_loop(
         sim.setJointTargetVelocity(h, 0.0)
 
 
-def stop_robot(sim, joints: list[int]) -> None:
+def stop_robot(sim: Any, joints: list[int]) -> None:
     """Safely zero velocities."""
     for h in joints:
         sim.setJointTargetVelocity(h, 0.0)
 
 
-def configure_draw(sim, enable: bool, tip: int | None, draw_max: int) -> int | None:
+def configure_draw(sim: Any, enable: bool, tip: int | None, draw_max: int) -> int | None:
     if not enable or tip is None:
         return None
     opts = sim.drawing_linestrip + sim.drawing_cyclic
-    return sim.addDrawingObject(opts, 3, 0.0, -1, draw_max, [1.0, 0.0, 0.0])
+    handle = sim.addDrawingObject(opts, 3, 0.0, -1, draw_max, [1.0, 0.0, 0.0])
+    return int(handle)

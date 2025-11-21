@@ -41,9 +41,9 @@ def _orthonormal_basis_from_axis(axis: Vector3) -> tuple[Vector3, Vector3, Vecto
     helper = np.array([0.0, 0.0, 1.0], dtype=float)
     if abs(np.dot(helper, n_hat)) > 0.99:
         helper = np.array([0.0, 1.0, 0.0], dtype=float)
-    u = np.cross(helper, n_hat)
+    u = np.cross(helper, n_hat).astype(np.float64)
     u /= np.linalg.norm(u)
-    v = np.cross(n_hat, u)
+    v = np.cross(n_hat, u).astype(np.float64)
     return n_hat, u, v
 
 

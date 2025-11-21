@@ -77,7 +77,7 @@ def cmd_velocity(args: argparse.Namespace) -> int:
     return 0
 
 
-def register_subparsers(subparsers: argparse._SubParsersAction) -> None:
+def register_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     velocity = subparsers.add_parser("velocity", help="Jacobian velocity-control demos (requires CoppeliaSim)")
     configure_velocity_parser(velocity)
     velocity.set_defaults(func=cmd_velocity)

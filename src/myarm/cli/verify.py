@@ -16,7 +16,7 @@ def cmd_verify_ik(args: argparse.Namespace) -> int:
     return run_verify_ik(args)
 
 
-def register_subparsers(subparsers: argparse._SubParsersAction) -> None:
+def register_subparsers(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     verify = subparsers.add_parser("verify", help="compare against CoppeliaSim")
     verify_sub = verify.add_subparsers(dest="verify_command", required=True)
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from functools import partial
-from typing import NamedTuple, cast
+from typing import Callable, NamedTuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -74,13 +74,13 @@ def fk_numeric(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> Matri
     if len(q) != 6:
         raise ValueError("q must have length 6")
     chain = forward_chain_numeric(dh_params, q)
-    return cast(Matrix44, chain[-1])
+    return chain[-1]
 
 
 def transforms_0_to_i(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> list[Matrix44]:
     """Return [T00, T01, ., T06] for current q."""
     chain = forward_chain_numeric(dh_params, q)
-    return cast(list[Matrix44], chain)
+    return chain
 
 
 def geometric_jacobian(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> NDArray[np.float64]:
@@ -143,8 +143,8 @@ def _ik_dls_step(
     it: int,
     T_des: np.ndarray,
     opts: IKOptions,
-    _fk: callable,
-    _jacobian: callable,
+    _fk: Callable[[np.ndarray], Matrix44],
+    _jacobian: Callable[[np.ndarray], NDArray[np.float64]],
 ) -> tuple[np.ndarray, float, float, int]:
     """Recursive step for the DLS IK solver."""
     T = _fk(q)

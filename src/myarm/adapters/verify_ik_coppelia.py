@@ -18,6 +18,7 @@ from myarm.adapters.coppelia_utils import (
     rotation_angle_deg,
     set_joint_positions,
 )
+from myarm.model.dh_params import demo_standard_6R_num
 from myarm.solvers.ik_solver import IKOptions, fk_numeric, solve_ik
 
 
@@ -95,7 +96,7 @@ def run_verify_ik(args: argparse.Namespace) -> int:
 
     best: tuple[np.ndarray, float, float] | None = None
     for index, (q, pos_err_mm, rot_err_rad, iterations) in enumerate(results, start=1):
-        T_fk = fk_numeric(q)
+        T_fk = fk_numeric(q, demo_standard_6R_num())
         pos_err = float(np.linalg.norm(T_fk[:3, 3] - target_mm[:3, 3]))
         rot_err = rotation_angle_deg(T_fk[:3, :3], target_mm[:3, :3])
         print(
