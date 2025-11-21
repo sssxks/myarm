@@ -11,7 +11,7 @@ import sympy as sp
 from numpy.typing import NDArray
 
 from .dh_params import DHParams, DHParamsNum, demo_standard_6R, demo_standard_6R_num
-from myarm.solvers.fk_solver import Rx, Tx, Tz, Rz
+from .transforms import Rx, Tx, Tz, Rz
 
 
 type Matrix6x6 = NDArray[np.float64]
