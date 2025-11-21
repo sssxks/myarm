@@ -35,7 +35,7 @@ jacobian.py
 import sympy as sp
 
 from myarm.model.dh_params import demo_standard_6R
-from myarm.solvers.fk_solver import Rx, Tx, Tz, Rz
+from myarm.model.transforms import Rx, Tx, Tz, Rz
 
 
 def _forward_chain_symbolic(dh):
@@ -70,10 +70,10 @@ def symbolic_geometric_jacobian():
 ```python
 from math import radians
 import numpy as np
-from myarm.model.jacobian import evaluate_numeric_geometric_jacobian
+from myarm.model.jacobian import geometric_jacobian_numeric
 
 q_deg = [0, -20, 35, 0, 45, 0]
-J = evaluate_numeric_geometric_jacobian([radians(v) for v in q_deg])
+J = geometric_jacobian_numeric([radians(v) for v in q_deg])
 np.set_printoptions(precision=5, suppress=True)
 print(J)                   # 与 sympy 数值化结果应当一致
 ```

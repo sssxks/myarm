@@ -10,7 +10,7 @@ import sympy as sp
 
 from myarm.model.jacobian import (
     JacobianSymbolic,
-    evaluate_numeric_geometric_jacobian,
+    geometric_jacobian_numeric,
     symbolic_geometric_jacobian,
 )
 
@@ -41,7 +41,7 @@ def cmd_jacobian_numeric(args: argparse.Namespace) -> int:
     q_vals = [float(val) for val in args.q]
     if args.deg:
         q_vals = [radians(val) for val in q_vals]
-    full = evaluate_numeric_geometric_jacobian(q_vals)
+    full = geometric_jacobian_numeric(q_vals)
     if args.block == "linear":
         matrix = full[:3, :]
         label = "Linear block (Jv)"

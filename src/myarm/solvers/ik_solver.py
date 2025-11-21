@@ -65,7 +65,7 @@ def _angle_delta(
     return wrapped
 
 
-# ---- Forward kinematics (fast numeric, consistent with solver.py) ----
+# ---- Forward kinematics ----
 def fk_numeric(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> Matrix44:
     """Compute T06 (4x4) numerically from joint angles q (rad).
 

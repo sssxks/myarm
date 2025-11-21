@@ -140,20 +140,10 @@ def geometric_jacobian_numeric(
     return np.vstack((Jv, Jw))
 
 
-def evaluate_numeric_geometric_jacobian(
-    joint_angles: Sequence[float],
-    dh: DHParamsNum | None = None,
-) -> Matrix6x6:
-    """Evaluate the 6x6 geometric Jacobian at a specific joint configuration."""
-
-    return geometric_jacobian_numeric(joint_angles, dh=dh)
-
-
 __all__ = [
     "JacobianSymbolic",
     "symbolic_geometric_jacobian",
     "dh_transform_numeric",
     "forward_chain_numeric",
     "geometric_jacobian_numeric",
-    "evaluate_numeric_geometric_jacobian",
 ]
