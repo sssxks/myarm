@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from functools import reduce
+from functools import reduce, partial
 import operator
 import itertools
 from typing import NamedTuple, cast
@@ -31,8 +31,6 @@ from numpy.typing import NDArray
 from myarm.core.orientation import rotation_xy_dash_z_numeric
 from myarm.model.dh_params import DHParamsNum, demo_standard_6R_num
 
-# currently, keep it as static var to simplify code
-dh_num: DHParamsNum = demo_standard_6R_num()
 
 Matrix44 = NDArray[np.float64]
 Matrix33 = NDArray[np.float64]
@@ -99,20 +97,20 @@ def dh_T(a: float, alpha: float, d: float, theta: float) -> Matrix44:
     return _rotz(theta) @ _tz(d) @ _tx(a) @ _rotx(alpha)
 
 
-def fk_numeric(q: Sequence[float] | np.ndarray) -> Matrix44:
+def fk_numeric(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> Matrix44:
     """Compute T06 (4x4) numerically from joint angles q (rad).
 
     This uses the exact same DH lists and theta offsets as demo_standard_6R().
     """
     if len(q) != 6:
         raise ValueError("q must have length 6")
-    th = np.asarray(q, dtype=float) + dh_num.theta_offset
+    th = np.asarray(q, dtype=float) + dh_params.theta_offset
     
     matrices = (
         dh_T(
-            float(dh_num.a[i]),
-            float(dh_num.alpha[i]),
-            float(dh_num.d[i]),
+            float(dh_params.a[i]),
+            float(dh_params.alpha[i]),
+            float(dh_params.d[i]),
             float(th[i]),
         )
         for i in range(6)
@@ -121,15 +119,15 @@ def fk_numeric(q: Sequence[float] | np.ndarray) -> Matrix44:
     return reduce(operator.mul, matrices, np.eye(4, dtype=float))
 
 
-def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[Matrix44]:
+def transforms_0_to_i(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> list[Matrix44]:
     """Return [T00, T01, …, T06] for current q."""
-    th = np.asarray(q, dtype=float) + dh_num.theta_offset
+    th = np.asarray(q, dtype=float) + dh_params.theta_offset
     
     matrices = [
         dh_T(
-            float(dh_num.a[i]),
-            float(dh_num.alpha[i]),
-            float(dh_num.d[i]),
+            float(dh_params.a[i]),
+            float(dh_params.alpha[i]),
+            float(dh_params.d[i]),
             float(th[i]),
         )
         for i in range(6)
@@ -139,7 +137,7 @@ def transforms_0_to_i(q: Sequence[float] | np.ndarray) -> list[Matrix44]:
     return cast(list[Matrix44], Ts)
 
 
-def geometric_jacobian(q: Sequence[float] | np.ndarray) -> NDArray[np.float64]:
+def geometric_jacobian(q: Sequence[float] | np.ndarray, dh_params: DHParamsNum) -> NDArray[np.float64]:
     """6x6 geometric Jacobian at q using base frame coordinates.
 
     J = [ Jv; Jw ], where for revolute joints i (i=1..6):
@@ -148,7 +146,7 @@ def geometric_jacobian(q: Sequence[float] | np.ndarray) -> NDArray[np.float64]:
         Jv_i = z × (o_6 - o)
         Jw_i = z
     """
-    Ts = transforms_0_to_i(q)
+    Ts = transforms_0_to_i(q, dh_params)
     o_n = Ts[6][:3, 3]
     J = np.zeros((6, 6), dtype=float)
     for i in range(6):
@@ -204,14 +202,17 @@ class IKOptions(NamedTuple):
 
 
 def _ik_once_dls(
-    T_des: np.ndarray, q0: Sequence[float] | np.ndarray, opts: IKOptions
+    T_des: np.ndarray, q0: Sequence[float] | np.ndarray, opts: IKOptions, dh_params: DHParamsNum
 ) -> tuple[np.ndarray, float, float, int]:
     """Run one DLS solve from seed q0. Returns (q, pos_err, rot_err, iters)."""
     q = np.asarray(q0, dtype=float).copy()
     q = np.array([_wrap_to_pi(float(v)) for v in q], dtype=float)
 
+    _fk_numeric = partial(fk_numeric, dh_params=dh_params)
+    _geometric_jacobian = partial(geometric_jacobian, dh_params=dh_params)
+
     for it in range(1, opts.max_iter + 1):
-        T = fk_numeric(q)
+        T = _fk_numeric(q)
         p_cur = T[:3, 3]
         R_cur = T[:3, :3]
         p_des = T_des[:3, 3]
@@ -224,7 +225,7 @@ def _ik_once_dls(
         if pos_err <= opts.tol_pos and rot_err <= opts.tol_rot:
             return q, pos_err, rot_err, it
 
-        J = geometric_jacobian(q)
+        J = _geometric_jacobian(q)
         # Weighted task: W * e where W=diag(w_pos,w_pos,w_pos,w_rot,w_rot,w_rot)
         W = np.diag([opts.w_pos] * 3 + [opts.w_rot] * 3)
         e = np.hstack((e_pos, e_rot))
@@ -250,7 +251,7 @@ def _ik_once_dls(
         q = np.array([_wrap_to_pi(float(v)) for v in q], dtype=float)
 
     # Return last iterate if not converged
-    T = fk_numeric(q)
+    T = _fk_numeric(q)
     pos_err = float(np.linalg.norm(T[:3, 3] - T_des[:3, 3]))
     rot_err = rotation_angle(T[:3, :3], T_des[:3, :3])
     return q, pos_err, rot_err, opts.max_iter
@@ -298,6 +299,8 @@ def solve_ik(
         opts = IKOptions()
     if T_des.shape != (4, 4):
         raise ValueError("T_des must be 4x4")
+    
+    dh_params = demo_standard_6R_num()
 
     # Default seed set: crude pose‑based + a few canonical postures
     seed_list: list[np.ndarray] = []
@@ -324,7 +327,7 @@ def solve_ik(
             unique_seeds.append(s_arr)
             tried.append(s_arr)
 
-    results = [_ik_once_dls(T_des, s_arr, opts) for s_arr in unique_seeds]
+    results = [_ik_once_dls(T_des, s_arr, opts, dh_params) for s_arr in unique_seeds]
 
     converged = [r for r in results if r[1] <= opts.tol_pos and r[2] <= opts.tol_rot]
 
