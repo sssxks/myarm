@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import math
 from math import degrees, radians
+from typing import Sequence
 
 import numpy as np
 import sympy as sp
@@ -134,7 +135,11 @@ def cmd_ik_euler(args: argparse.Namespace) -> int:
         alpha_r, beta_r, gamma_r = (alpha, beta, gamma)
         
     limit = int(args.limit)
-    xyz_mm = [round(v, 3) for v in (x*1000, y*1000, z*1000) if args.pos_unit == 'm' else (x, y, z)]
+    if args.pos_unit == "m":
+        xyz_vals = (x * 1000.0, y * 1000.0, z * 1000.0)
+    else:
+        xyz_vals = (x, y, z)
+    xyz_mm = [round(v, 3) for v in xyz_vals]
     euler_rad = [round(v, 6) for v in (alpha_r, beta_r, gamma_r)]
     euler_deg = [round(degrees(v), 3) for v in (alpha_r, beta_r, gamma_r)]
 
